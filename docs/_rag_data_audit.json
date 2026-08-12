@@ -1,0 +1,305 @@
+{
+ "files": [
+  {
+   "title": "中华人民共和国公路法",
+   "category": "法律",
+   "chapters": 9,
+   "articles": 87,
+   "full_text_chars": 9392,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2017-11-05"
+  },
+  {
+   "title": "中华人民共和国安全生产法",
+   "category": "法律",
+   "chapters": 7,
+   "articles": 119,
+   "full_text_chars": 20191,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2021-09-01"
+  },
+  {
+   "title": "中华人民共和国建筑法",
+   "category": "法律",
+   "chapters": 8,
+   "articles": 85,
+   "full_text_chars": 8795,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2019-04-23"
+  },
+  {
+   "title": "中华人民共和国消防法",
+   "category": "法律",
+   "chapters": 7,
+   "articles": 74,
+   "full_text_chars": 11148,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2021-04-29"
+  },
+  {
+   "title": "中华人民共和国突发事件应对法",
+   "category": "法律",
+   "chapters": 8,
+   "articles": 106,
+   "full_text_chars": 15712,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2024-11-01"
+  },
+  {
+   "title": "中华人民共和国职业病防治法",
+   "category": "法律",
+   "chapters": 7,
+   "articles": 88,
+   "full_text_chars": 14275,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2018-12-29"
+  },
+  {
+   "title": "中华人民共和国行政处罚法",
+   "category": "法律",
+   "chapters": 8,
+   "articles": 86,
+   "full_text_chars": 10405,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2021-07-15"
+  },
+  {
+   "title": "中华人民共和国行政强制法",
+   "category": "法律",
+   "chapters": 7,
+   "articles": 71,
+   "full_text_chars": 9226,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2012-01-01"
+  },
+  {
+   "title": "中华人民共和国道路交通安全法",
+   "category": "法律",
+   "chapters": 8,
+   "articles": 124,
+   "full_text_chars": 16224,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2021-04-29"
+  },
+  {
+   "title": "中华人民共和国道路运输条例",
+   "category": "行政法规",
+   "chapters": 7,
+   "articles": 82,
+   "full_text_chars": 10129,
+   "doc_no": "国务院令第406号",
+   "status": "现行有效",
+   "effective_date": "2023-07-20"
+  },
+  {
+   "title": "四川省《中华人民共和国道路交通安全法》实施办法",
+   "category": "地方性法规",
+   "chapters": 7,
+   "articles": 77,
+   "full_text_chars": 11397,
+   "doc_no": "川常备〔2021〕74号",
+   "status": "现行有效",
+   "effective_date": "2022-01-01"
+  },
+  {
+   "title": "四川省地质灾害防治条例",
+   "category": "地方性法规",
+   "chapters": 8,
+   "articles": 65,
+   "full_text_chars": 10976,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2025-05-01"
+  },
+  {
+   "title": "四川省安全生产条例",
+   "category": "地方性法规",
+   "chapters": 7,
+   "articles": 78,
+   "full_text_chars": 15352,
+   "doc_no": "川常备〔2023〕17号",
+   "status": "现行有效",
+   "effective_date": "2023-09-01"
+  },
+  {
+   "title": "四川省有限空间作业安全管理规定",
+   "category": "政府规章",
+   "chapters": 6,
+   "articles": 39,
+   "full_text_chars": 6568,
+   "doc_no": "川府规备〔2025〕1号",
+   "status": "现行有效",
+   "effective_date": "2025-03-01"
+  },
+  {
+   "title": "四川省消防条例",
+   "category": "地方性法规",
+   "chapters": 8,
+   "articles": 78,
+   "full_text_chars": 11892,
+   "doc_no": "",
+   "status": "已修改",
+   "effective_date": "2011-08-01"
+  },
+  {
+   "title": "四川省生产安全事故报告和调查处理规定",
+   "category": "政府规章",
+   "chapters": 6,
+   "articles": 44,
+   "full_text_chars": 7160,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2008-09-01"
+  },
+  {
+   "title": "四川省生产经营单位安全生产责任规定",
+   "category": "政府规章",
+   "chapters": 5,
+   "articles": 53,
+   "full_text_chars": 9067,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2007-12-09"
+  },
+  {
+   "title": "四川省突发事件应对办法",
+   "category": "政府规章",
+   "chapters": 7,
+   "articles": 60,
+   "full_text_chars": 7313,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2012-08-01"
+  },
+  {
+   "title": "四川省道路交通安全责任制规定",
+   "category": "政府规章",
+   "chapters": 6,
+   "articles": 64,
+   "full_text_chars": 10164,
+   "doc_no": "川府规备〔2025〕2号",
+   "status": "现行有效",
+   "effective_date": "2025-07-16"
+  },
+  {
+   "title": "四川省道路运输条例",
+   "category": "地方性法规",
+   "chapters": 6,
+   "articles": 70,
+   "full_text_chars": 10322,
+   "doc_no": "",
+   "status": "现行有效",
+   "effective_date": "2014-11-01"
+  },
+  {
+   "title": "四川省高速公路条例",
+   "category": "地方性法规",
+   "chapters": 7,
+   "articles": 63,
+   "full_text_chars": 8117,
+   "doc_no": "川常备〔2022〕15号",
+   "status": "现行有效",
+   "effective_date": "2022-06-09"
+  },
+  {
+   "title": "地质灾害防治条例",
+   "category": "行政法规",
+   "chapters": 7,
+   "articles": 49,
+   "full_text_chars": 7267,
+   "doc_no": "国务院令第394号",
+   "status": "现行有效",
+   "effective_date": ""
+  },
+  {
+   "title": "安全生产违法行为行政处罚办法",
+   "category": "部门规章",
+   "chapters": 6,
+   "articles": 90,
+   "full_text_chars": 13920,
+   "doc_no": "中华人民共和国应急管理部令（第18号）",
+   "status": "",
+   "effective_date": ""
+  },
+  {
+   "title": "工伤保险条例",
+   "category": "行政法规",
+   "chapters": 8,
+   "articles": 67,
+   "full_text_chars": 9682,
+   "doc_no": "国务院令第375号",
+   "status": "现行有效",
+   "effective_date": "2011-01-01"
+  },
+  {
+   "title": "建设工程安全生产管理条例",
+   "category": "行政法规",
+   "chapters": 8,
+   "articles": 71,
+   "full_text_chars": 10096,
+   "doc_no": "国务院令第393号",
+   "status": "现行有效",
+   "effective_date": ""
+  },
+  {
+   "title": "特种设备安全监察条例",
+   "category": "行政法规",
+   "chapters": 8,
+   "articles": 103,
+   "full_text_chars": 17176,
+   "doc_no": "国务院令第373号",
+   "status": "现行有效",
+   "effective_date": ""
+  },
+  {
+   "title": "生产安全事故应急预案管理办法",
+   "category": "部门规章",
+   "chapters": 7,
+   "articles": 48,
+   "full_text_chars": 5797,
+   "doc_no": "国家安全生产监督管理总局令（第88号）",
+   "status": "",
+   "effective_date": ""
+  },
+  {
+   "title": "生产安全事故报告和调查处理条例",
+   "category": "行政法规",
+   "chapters": 6,
+   "articles": 46,
+   "full_text_chars": 5971,
+   "doc_no": "国务院令第493号",
+   "status": "有效",
+   "effective_date": ""
+  }
+ ],
+ "totals": {
+  "files": 28,
+  "chapters": 199,
+  "articles": 2087,
+  "chars": 303734,
+  "cross_refs(第X条)": 172,
+  "ref_occurrences(第X条含条号)": 2259,
+  "categories": {
+   "法律": 9,
+   "行政法规": 6,
+   "地方性法规": 6,
+   "政府规章": 5,
+   "部门规章": 2
+  }
+ },
+ "article_len": {
+  "avg": 134.6,
+  "min": 15,
+  "max": 907,
+  "count": 2087
+ }
+}

@@ -8,3 +8,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.log
+
+# ===== 爬虫调试残留（非交付内容）=====
+crawler_output/_raw_*.txt
