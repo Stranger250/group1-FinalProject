@@ -1,0 +1,30 @@
+# 蜀道安全助手 backend 运行时依赖
+# 说明：RAG/AI 依赖（langchain/bge/chroma/jieba 等）复用仓库根 requirements.txt 已装环境，此处只列 Web 后端所需。
+# 安装：cd shudao/backend && pip install -r requirements.txt
+
+# ===== E02 AI 出题（OpenAI 兼容协议客户端；jieba/rank_bm25 复用根环境已装）=====
+openai>=1
+
+# ===== Web 框架（fastapi 缺失，需安装）=====
+fastapi>=0.115
+
+# ===== ASGI 服务器（已装，列出保持完整）=====
+uvicorn[standard]
+
+# ===== ORM 与数据库 =====
+sqlalchemy>=2.0
+pymysql
+cryptography            # MySQL8 caching_sha2_password 认证依赖
+
+# ===== 缓存（redis 缺失，需安装；E04 考试会话用）=====
+redis>=5
+
+# ===== 鉴权 =====
+python-jose[cryptography]
+bcrypt>=4.1             # 直接用 bcrypt，勿装 passlib（与 bcrypt 5.0 不兼容）
+python-multipart        # OAuth2PasswordRequestForm 表单解析
+email-validator
+
+# ===== 配置 =====
+pydantic-settings
+python-dotenv
