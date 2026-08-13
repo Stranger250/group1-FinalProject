@@ -11,3 +11,6 @@ __pycache__/
 
 # ===== 爬虫调试残留（非交付内容）=====
 crawler_output/_raw_*.txt
+
+# ===== 知识库构建产物（scripts/build_knowledge_base.py 可再生，不入库）=====
+backend/data/chroma_kb/

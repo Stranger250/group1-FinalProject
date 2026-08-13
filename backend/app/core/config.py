@@ -52,6 +52,38 @@ class Settings(BaseSettings):
     law_json_dir: str = "../crawler_output"
     gen_min_count: int = 5
 
+    # ===== 模块二 AI 助手 RAG（M1 建库 / M2 检索 / M3 问答）=====
+    # 本地模型/向量库均在实训根环境（仓库根），用绝对路径规避 transformers 5.14.1 相对路径 HFValidationError
+    embed_model_dir: str = "D:/code/2026/7_8月实训/bge-large-zh"
+    rerank_model_dir: str = "D:/code/2026/7_8月实训/bge-reranker-base"
+    # Chroma 持久目录放在 backend/data/chroma_kb（新目录，勿指向实训根 PDF 语料的 chroma_db）
+    chroma_persist_dir: str = str(Path(__file__).resolve().parents[2] / "data" / "chroma_kb")
+    chroma_collection: str = "shudao_kb"
+    # 检索参数（对齐 docs/RAG优化方案.md §0.2 全局参数契约，唯一真源）
+    rag_vector_top_k: int = 50          # 向量路召回
+    rag_bm25_top_k: int = 50            # BM25 路召回
+    rag_rrf_k: int = 60                 # RRF 融合 K
+    rag_fusion_top_k: int = 20          # RRF 融合后取前 N 进重排
+    rag_rerank_top_n: int = 5           # 重排后进 LLM 的块数（含展开块）
+    rag_conf_refuse: float = 0.30       # 归一化置信度 < 0.30 → 拒答
+    rag_conf_conservative: float = 0.45  # < 0.45 → 保守模式；≥ → 全量
+    # 向量余弦相似度绝对下限：RRF 纯排名融合对无关查询也会排个 top-1，相对峰值归一化
+    # 无法识别「检索到但与问题无关」。top_vec_sim < 下限即拒答（防幻觉）。
+    # 0.75 按评测集标定（data/calibrate_refusal.py，2026-08-13）：
+    #   相关查询 top_vec_sim ∈ [0.818, 0.899]（n=6），无关 ∈ [0.641, 0.716]（n=8），
+    #   两簇间空隙 [0.716, 0.818]，取中点 0.75 干净分离。0.30 对 bge 稠密向量
+    #   （基线相似度 ~0.6-0.7）形同虚设，无关查询也全部 >0.30。
+    rag_vec_sim_floor: float = 0.75
+    rag_parent_split_chars: int = 400   # 条长超过该值才二次分块
+    rag_child_min_chars: int = 100      # 子块最小字数
+    rag_child_max_chars: int = 250      # 子块最大字数
+    rag_max_rounds: int = 5             # 多轮上下文轮数
+    # 问答流式（M3）
+    rag_llm_semaphore: int = 8          # LLM 并发信号量（背压，防打满上游限流）
+    rag_llm_max_tokens: int = 800       # 全量模式回答 max_tokens
+    rag_llm_conservative_tokens: int = 300  # 保守模式回答 max_tokens（收紧，防过度发挥）
+    rag_stream_ping_sec: float = 60.0   # SSE 保活阈值：LLM 静默超过该秒数发 ping
+
     model_config = SettingsConfigDict(
         env_file=(ENV_FILE,),
         env_file_encoding="utf-8",

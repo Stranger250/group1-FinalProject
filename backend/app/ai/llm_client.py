@@ -15,7 +15,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 from openai import (
@@ -105,6 +105,71 @@ async def chat_json(
                 # 鉴权/参数/服务端不可重试错误，直接失败
                 raise LLMError(f"LLM 调用失败：{exc}") from exc
         raise LLMError(f"LLM 调用多次失败（已重试 {max_retries} 次）：{last_exc}")
+    finally:
+        await client.close()
+
+
+async def chat_stream(
+    system: str,
+    user: str,
+    temperature: float = 0.1,
+    max_tokens: int = 800,
+    max_retries: int = 1,
+) -> AsyncIterator[str]:
+    """OpenAI 兼容 chat.completions 流式（模块二 A01 SSE delta 数据源）。
+
+    与 chat_json 的区别：
+    - stream=True，逐 chunk 从 choices[0].delta.content 取增量文本 yield；
+    - 重试只在「首块之前」进行（网络错误尚未出流 → 指数退避重试）；
+      已出流后 SSE 断点续传不可靠，任何中断直接抛 LLMError，由 qa_service 落 FAILED。
+    """
+    settings = get_settings()
+    if not (settings.base_url and settings.api_key and settings.model_name):
+        raise LLMError("LLM 未配置：请填写 .env 的 BASE_URL/API_KEY/MODEL_NAME")
+    try:
+        client = AsyncOpenAI(
+            base_url=settings.base_url,
+            api_key=settings.api_key,
+            timeout=120.0,
+            max_retries=0,  # 重试策略由本函数统一控制
+        )
+    except ValueError as exc:
+        raise LLMError(f"LLM 配置错误：{exc}") from exc
+
+    started = False
+    last_exc: Exception | None = None
+    try:
+        for attempt in range(max_retries + 1):
+            try:
+                stream = await client.chat.completions.create(
+                    model=settings.model_name,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    started = True
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    piece = delta.content if delta else None
+                    if piece:
+                        yield piece
+                return
+            except _RETRYABLE as exc:
+                last_exc = exc
+                if started:
+                    raise LLMError(f"LLM 流中断（已出流）：{exc}") from exc
+                logger.warning("LLM 流式调用失败（第 %s 次）：%s", attempt + 1, exc)
+                if attempt < max_retries:
+                    await asyncio.sleep(2 ** (attempt + 1))  # 2s、4s…
+            except OpenAIError as exc:
+                raise LLMError(f"LLM 调用失败：{exc}") from exc
+        raise LLMError(f"LLM 流式调用多次失败（已重试 {max_retries} 次）：{last_exc}")
     finally:
         await client.close()
 

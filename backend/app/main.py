@@ -12,18 +12,57 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
+import asyncio
+import logging
+import time
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-from .api import ai, auth, exam, exam_running, paper
+from .api import ai, auth, chat, exam, exam_running, paper
+from .rag.embedder import get_embedder
+from .rag.reranker import get_reranker
+from .rag.retriever import get_retriever
+from .rag.sensitive import load_sensitive_words
+from .service.chat_service import load_quick_questions
 from .utils.response import resp
+
+logger = logging.getLogger("uvicorn.error")
+
+
+def _warmup(name: str, fn) -> None:
+    """预热一项：加载失败仅告警不阻断启动（chat 接口届时返回 500 而非崩启动）。"""
+    t0 = time.time()
+    try:
+        fn()
+        logger.info("[预热] %s 完成（%.1fs）", name, time.time() - t0)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[预热] %s 失败：%s", name, exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """启动预热：加载嵌入/精排模型 + 检索索引（冷启动慢，预热消除首个请求卡顿）。"""
+    async def _warmup_all() -> None:
+        # 同步阻塞加载放线程池，避免阻塞事件循环
+        await asyncio.to_thread(_warmup, "嵌入模型", get_embedder)
+        await asyncio.to_thread(_warmup, "精排模型", get_reranker)
+        await asyncio.to_thread(_warmup, "检索索引(BM25+Chroma)", get_retriever)
+        _warmup("敏感词库", load_sensitive_words)
+        _warmup("快捷提问", load_quick_questions)
+        logger.info("[预热] 全部完成，AI 助手就绪")
+
+    await _warmup_all()
+    yield
+
 
 app = FastAPI(
     title="蜀道安全助手 API",
-    description="模块三 考试工坊（E01-E05）后端接口",
+    description="模块三 考试工坊（E01-E05）+ 模块二 AI 智能助手（A01-A07）后端接口",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # 开发环境放开跨域；生产按 ARCHITECTURE §10 收紧
@@ -40,6 +79,7 @@ app.include_router(exam.router)
 app.include_router(ai.router)
 app.include_router(paper.router)
 app.include_router(exam_running.router)
+app.include_router(chat.router)
 
 
 @app.exception_handler(HTTPException)

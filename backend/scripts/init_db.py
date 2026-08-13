@@ -213,6 +213,24 @@ def _migrate_exam_record(cur, db: str) -> bool:
     return migrated
 
 
+def _migrate_ai_chat(cur, db: str) -> bool:
+    """模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 点赞/点踩）。
+
+    语义：NULL=未反馈、1=有用、-1=没用、0=清除；单行 UPDATE 天然幂等。
+    schema.sql 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表补列，这里针对旧库做幂等 ALTER。
+    """
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='message'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    if "feedback" in cols:
+        return False
+    cur.execute("ALTER TABLE message ADD COLUMN feedback TINYINT NULL")
+    return True
+
+
 def main() -> None:
     user, pw, host, port, db = parse_db_url(get_settings().database_url)
     settings = get_settings()
@@ -266,6 +284,11 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_exam_record(cur, db):
                 print("[OK] exam_record/exam_answer 表迁移：E04/E05 字段补齐")
+
+        # 2.8) 模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 反馈）
+        with conn.cursor() as cur:
+            if _migrate_ai_chat(cur, db):
+                print("[OK] message 表迁移：新增 feedback 列（A07 反馈）")
 
         # 3) 初始化角色（幂等）
         with conn.cursor() as cur:

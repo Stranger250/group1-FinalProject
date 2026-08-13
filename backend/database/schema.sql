@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS message (
   content         MEDIUMTEXT   NOT NULL,
   token_count     INT          NOT NULL DEFAULT 0,
   status          VARCHAR(16)  NOT NULL DEFAULT 'SUCCESS',
+  feedback        TINYINT      NULL COMMENT 'A07 反馈：1=有用 -1=没用 0=清除 NULL=未反馈',
   create_time     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_conversation (conversation_id)
 ) ENGINE = InnoDB;

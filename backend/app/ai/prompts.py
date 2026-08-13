@@ -210,3 +210,65 @@ def build_rewrite_prompt(
         f"只输出 JSON，不要 Markdown，不要额外说明。"
     )
     return system, user
+
+
+def _format_blocks(blocks: list) -> str:
+    """把检索块格式化为 prompt 参考资料（[n] 与引用卡片序号一一对应）。
+
+    blocks 为 RetrievedBlock 列表；出处头 = 标题 + 条号（章头块无条号只给标题）。
+    """
+    lines = []
+    for i, b in enumerate(blocks, 1):
+        head = "｜".join(x for x in (b.title, b.article_no) if x)
+        lines.append(f"{i}. 【{head}】\n{b.content}")
+    return "\n\n".join(lines)
+
+
+def build_qa_prompt(
+    blocks: list,
+    history: list[str],
+    query: str,
+    mode: str,
+    *,
+    max_tokens: int = 800,
+    conservative_tokens: int = 300,
+) -> tuple[str, str, int]:
+    """构造问答 Prompt（A01 RAG 智能问答），返回 (system, user, max_tokens)。
+
+    - blocks：检索返回的父块列表（RetrievedBlock，含 title/article_no/content）；
+    - history：历史 user 问句（时间正序，最近的几轮）；
+    - query：当前用户问题（原文，非改写串——改写只用于检索）；
+    - mode：full/conservative——conservative 收紧 max_tokens（防过度发挥）。
+    system 五条硬约束：只依据资料、事实逐字出处标 [n]、禁库外编造、数值/条号原样复述、
+    资料不足如实说明。引用脚注 [n] 由后端 grounding 校验（越界删除，缺失置 0）。
+    """
+    refs = _format_blocks(blocks)
+    history_text = _format_history(history)
+    limit = conservative_tokens if mode == "conservative" else max_tokens
+
+    system = (
+        "你是「蜀道安全助手」，一名精通安全生产、消防、职业健康等法律法规的 AI 助手。"
+        "你只能依据下方【参考资料】中的条文原文回答用户关于安全生产法规的问题。"
+        "必须遵守以下硬约束：\n"
+        "1. 仅依据【参考资料】作答，严禁使用库外知识或凭空编造条文内容；"
+        "资料不足以回答时，如实说明「资料中没有查到明确依据」。\n"
+        "2. 涉及事实、数据、处罚金额、时限、条号等必须严格对应资料原文，数值和条号逐字原样复述，不得换算、凑整或改写。\n"
+        "3. 引用某条资料时在对应句末用脚注标注 [n]，n 为【参考资料】中的条目序号；"
+        "引用哪条资料就标哪个号，不得标注未使用的资料，也不得编造不存在的序号。\n"
+        "4. 若用户问的是与安全生产无关的寒暄，可简短礼貌回应；"
+        "若是模糊或非法的问题，先说明无法回答。\n"
+        "5. 用简体中文回答，结构清晰、条理分明，直接给出结论再解释依据。"
+    )
+
+    user = f"【参考资料】\n{refs}\n\n{history_text}【问题】\n{query}\n\n请依据【参考资料】回答上述问题，引用出处时标注 [n]。"
+    return system, user, limit
+
+
+def _format_history(history: list[str]) -> str:
+    """历史 user 问句摘要（至多 5 轮，无历史返回空串）。"""
+    if not history:
+        return ""
+    lines = []
+    for i, q in enumerate(history, 1):
+        lines.append(f"第{i}轮：{q}")
+    return "【对话历史】\n" + "\n".join(lines) + "\n\n"
