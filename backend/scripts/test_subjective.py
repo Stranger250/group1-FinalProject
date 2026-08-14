@@ -2,10 +2,11 @@
 """解答题（SUBJECTIVE）全链路验证：手动录入 → AI 出题 → 组卷 → 考试作答 → 要点判分。
 
 运行：cd shudao/backend && PYTHONIOENCODING=utf-8 python scripts/test_subjective.py
-前置：后端在 8001 端口（本次验证专用实例）。
+前置：后端在 8000 端口（可用 BASE_URL 环境变量覆盖）。
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from datetime import datetime
@@ -16,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import httpx
 
-BASE = "http://127.0.0.1:8001/api/v1"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000/api/v1")
 PASS = 0
 FAIL = 0
 FAILURES: list[str] = []

@@ -62,6 +62,14 @@ class ReviewService:
         from ..utils.audit import write_audit
         write_audit(db, q, "question_review", target_type="question", target_id=qid,
                     detail=f"action={payload.action} note={payload.review_note or ''} reviewer={reviewer_id}")
+        # 负样本回流：驳回时把题面+意见写入反例库（_drafts/4 §5，供后续出题规避同类问题）
+        if payload.action == "REJECT":
+            from ..ai.rejected_examples import add_rejected_example
+            add_rejected_example(
+                content=q.content, type_=q.type,
+                knowledge_point=q.knowledge_point,
+                review_note=payload.review_note or "",
+            )
         return _to_dict(q)
 
     @staticmethod

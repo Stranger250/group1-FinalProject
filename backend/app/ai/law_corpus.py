@@ -5,11 +5,14 @@ E02 AI 出题的检索层。技术决策（E02 一期）：
 - 语料来源 crawler_output/ 下的 28 部法规 JSON（UTF-8），结构统一为
   `chapters[].{chapter, articles[].{no, content}}`，条号 no 存为 article_no，
   law_title 取文件顶层 title（已 strip）；
-- 只有 content 非空、且无 parse_error（文件级 + 单条防御）的条款才入库。
+- 只有 content 非空、且无 parse_error（文件级 + 单条防御）的条款才入库；
+- 每条条款额外计算 difficulty（规则评分器，与 rag/build/parser.compute_difficulty 同源），
+  供 AI 出题按难度过滤取料（_drafts/4-AI出题专项 §3 落地）。
 
 对外契约（供其他模块 import）：
     LawCorpus(law_dir)                —— law_dir 目录内 *.json 为法规文件
-    corpus.search(query, top_k, law_title) -> [{law_title, article_no, content, score}]
+    corpus.search(query, top_k, law_title, difficulty)
+                                      -> [{law_title, article_no, content, difficulty, score}]
     corpus.law_titles                 —— 全部法规 title（去重、按名排序）
     load_corpus()                     —— lru_cache 单例，默认读 settings.law_json_dir
 """
@@ -29,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 # 索引文件的文件名（统一扁平索引，不是法规本体，跳过）
 _INDEX_FILE = "index.json"
+
+# 难度映射：规则评分 easy/medium/hard → 出题枚举 EASY/MEDIUM/HARD
+_DIFFICULTY_UPPER = {"easy": "EASY", "medium": "MEDIUM", "hard": "HARD"}
 
 
 def _repo_root() -> Path:
@@ -71,7 +77,7 @@ class LawCorpus:
             self._bm25 = BM25Okapi(self._tokenized)
 
     def _load_file(self, path: Path) -> None:
-        """解析单个法规 JSON，把合法条款追加进条款表。"""
+        """解析单个法规 JSON，把合法条款追加进条款表（含难度标记）。"""
         with open(path, encoding="utf-8") as fp:
             doc = json.load(fp)
         # 文件级解析失败（parse_error 非空，如 null 则视为解析正常）→ 整篇不入库
@@ -83,6 +89,10 @@ class LawCorpus:
             logger.warning("跳过 %s：顶层 title 为空", path.name)
             return
         self._titles.add(title)
+        # 条款难度评分器（与 rag/build/parser.compute_difficulty 同规则，避免 import 跨层）
+        penalty_kw = ("罚款", "责令", "拘留", "追究刑事责任")
+        import re
+        num_unit_re = re.compile(r"\d+\s*(元|日|天|小时|万|%|％)")
         for chapter in doc.get("chapters") or []:
             for article in chapter.get("articles") or []:
                 content = (article.get("content") or "").strip()
@@ -91,8 +101,24 @@ class LawCorpus:
                 if article.get("parse_error"):
                     continue  # 防未来单条解析失败
                 article_no = (article.get("no") or "").strip()
+                # 难度：0=easy / 1=medium / ≥2=hard（规则与 build 层一致）
+                d_score = 0
+                if any(k in content for k in penalty_kw):
+                    d_score += 1
+                if num_unit_re.search(content):
+                    d_score += 1
+                if content.count("；") >= 3:
+                    d_score += 1
+                if len(content) > 300:
+                    d_score += 1
+                difficulty = "easy" if d_score == 0 else ("medium" if d_score == 1 else "hard")
                 self._articles.append(
-                    {"law_title": title, "article_no": article_no, "content": content}
+                    {
+                        "law_title": title,
+                        "article_no": article_no,
+                        "content": content,
+                        "difficulty": _DIFFICULTY_UPPER[difficulty],
+                    }
                 )
                 self._tokenized.append(self._tokenize(content))
 
@@ -108,33 +134,40 @@ class LawCorpus:
         query: str,
         top_k: int = 8,
         law_title: str | None = None,
+        difficulty: str | None = None,
     ) -> list[dict]:
-        """BM25 检索全部条款，返回按 score 降序的 [{law_title, article_no, content, score}]。
+        """BM25 检索全部条款，返回按 score 降序的 [{law_title, article_no, content, difficulty, score}]。
 
-        若 law_title 指定，仅在该法规内检索（title 精确匹配），命中即跨法规一并检索。
-        score 为 0（或负，常见词 idf 为负）的条款视为无意义匹配，丢弃。
+        - law_title 指定时仅在该法规内检索（title 精确匹配），命中即跨法规一并检索；
+        - difficulty（EASY/MEDIUM/HARD）指定时优先保留该难度条款：先按难度过滤取足 top_k，
+          不足部分再回落全量补足（保证取料不因难度过滤而变空）；
+        - score 为 0（或负，常见词 idf 为负）的条款视为无意义匹配，丢弃。
         """
         if not query or not query.strip() or self._bm25 is None:
             return []
         query_tokens = self._tokenize(query)
         if not query_tokens:
             return []
-        scores = self._bm25.get_scores(query_tokens)
         if law_title is not None:
-            # 限定单部法规：只对命中子集重新打分（idf 在法规内计算，排序更合理）
-            return self._search_subset(query_tokens, law_title, top_k)
-        # 全量打分 → 按分数降序取 top_k
-        ranked = sorted(
-            zip(range(len(scores)), scores), key=lambda pair: pair[1], reverse=True
-        )
-        results: list[dict] = []
-        for idx, score in ranked:
-            if score <= 0:
-                break  # 已按降序，之后都是 0/负分，无需继续
-            results.append({**self._articles[idx], "score": round(float(score), 4)})
-            if len(results) >= top_k:
-                break
-        return results
+            base = self._search_subset(query_tokens, law_title, top_k * 3)
+        else:
+            scores = self._bm25.get_scores(query_tokens)
+            ranked = sorted(
+                zip(range(len(scores)), scores), key=lambda pair: pair[1], reverse=True
+            )
+            base = []
+            for idx, score in ranked:
+                if score <= 0:
+                    break
+                base.append({**self._articles[idx], "score": round(float(score), 4)})
+        # 难度过滤：优先同难度，不足补全量（保证取料充足）
+        if difficulty and difficulty.upper() in ("EASY", "MEDIUM", "HARD"):
+            wanted = [a for a in base if a["difficulty"] == difficulty.upper()]
+            if len(wanted) >= top_k:
+                return wanted[:top_k]
+            rest = [a for a in base if a["difficulty"] != difficulty.upper()]
+            return (wanted + rest)[:top_k]
+        return base[:top_k]
 
     def _search_subset(
         self, query_tokens: list[str], law_title: str, top_k: int

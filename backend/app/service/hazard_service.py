@@ -159,11 +159,126 @@ class HazardService:
                     detail=f"hazard_no={h.hazard_no}")
         return {"message": "已闭环", "hazard_no": h.hazard_no, "status": h.status}
 
+    # ---------- H04 派单 / H05 整改 / H06 验收 ----------
+
+    @staticmethod
+    def _require_manage(user: User) -> None:
+        """纵深防御：派单/验收仅 SAFETY/ADMIN（api 层已有门禁）。"""
+        if user.role_id not in (RoleId.SAFETY, RoleId.ADMIN):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="无权操作")
+
+    @staticmethod
+    def dispatch(db: Session, hid: int, user: User, *, handler_id: int,
+                 deadline) -> dict:
+        """H04 派单：待处理 → 处理中，指定整改负责人与期限。
+
+        状态机：仅 WAIT_PROCESS 可派单（重复派单 400）；handler 用户必须存在且启用。
+        """
+        HazardService._require_manage(user)
+        h = HazardRepo.get_by_id(db, hid)
+        if h is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="隐患不存在")
+        if h.status != HazardStatus.WAIT_PROCESS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"仅待处理状态的隐患可派单（当前状态 {h.status}）",
+            )
+        handler = db.get(User, handler_id)
+        if handler is None or handler.status != 1:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="整改负责人不存在或已禁用")
+        h.handler_id = handler_id
+        h.deadline = deadline
+        h.status = HazardStatus.PROCESSING
+        HazardRepo.add_log(
+            db, h.id, user.id, HazardLogOperation.DISPATCH,
+            old_status=HazardStatus.WAIT_PROCESS, new_status=HazardStatus.PROCESSING,
+            remark=f"派单给 {handler.name or handler.username}"
+                   + (f"，期限 {deadline.strftime('%Y-%m-%d %H:%M')}" if deadline else ""),
+            commit=False,
+        )
+        db.commit()
+        db.refresh(h)
+        from ..utils.audit import write_audit
+        write_audit(db, user, "hazard_dispatch", target_type="hazard", target_id=hid,
+                    detail=f"hazard_no={h.hazard_no} handler={handler_id}")
+        return {"message": "已派单", "hazard_no": h.hazard_no, "status": h.status}
+
+    @staticmethod
+    def rectify(db: Session, hid: int, user: User, *, rectification_measure: str,
+                rectification_images: list[str]) -> dict:
+        """H05 整改反馈：处理中 → 待验收，落整改措施与整改后照片。
+
+        操作人限制：整改负责人本人（handler_id==user.id）或 SAFETY/ADMIN。
+        """
+        h = HazardRepo.get_by_id(db, hid)
+        if h is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="隐患不存在")
+        if h.status != HazardStatus.PROCESSING:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"仅处理中的隐患可提交整改（当前状态 {h.status}）",
+            )
+        if user.role_id not in (RoleId.SAFETY, RoleId.ADMIN) and h.handler_id != user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="仅整改负责人或管理员可提交整改")
+        h.rectification_measure = rectification_measure
+        h.rectification_images = (
+            ",".join(rectification_images) if rectification_images else None
+        )
+        h.status = HazardStatus.WAIT_CHECK
+        HazardRepo.add_log(
+            db, h.id, user.id, HazardLogOperation.RECTIFY,
+            old_status=HazardStatus.PROCESSING, new_status=HazardStatus.WAIT_CHECK,
+            remark="整改完成，提交验收",
+            commit=False,
+        )
+        db.commit()
+        db.refresh(h)
+        from ..utils.audit import write_audit
+        write_audit(db, user, "hazard_rectify", target_type="hazard", target_id=hid,
+                    detail=f"hazard_no={h.hazard_no}")
+        return {"message": "整改已提交", "hazard_no": h.hazard_no, "status": h.status}
+
+    @staticmethod
+    def check(db: Session, hid: int, user: User, *, passed: bool,
+              reject_reason: str | None) -> dict:
+        """H06 验收：待验收 → 已闭环（通过）或 已驳回（不通过，需原因）。
+
+        驳回后状态 REJECTED（终态，留痕原因）；通过则闭环 FINISHED。
+        """
+        HazardService._require_manage(user)
+        h = HazardRepo.get_by_id(db, hid)
+        if h is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="隐患不存在")
+        if h.status != HazardStatus.WAIT_CHECK:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"仅待验收的隐患可验收（当前状态 {h.status}）",
+            )
+        if not passed and not (reject_reason or "").strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="驳回必须填写原因")
+        new_status = HazardStatus.FINISHED if passed else HazardStatus.REJECTED
+        op = HazardLogOperation.ACCEPT if passed else HazardLogOperation.REJECT
+        h.status = new_status
+        h.reject_reason = None if passed else (reject_reason or "").strip()
+        HazardRepo.add_log(
+            db, h.id, user.id, op,
+            old_status=HazardStatus.WAIT_CHECK, new_status=new_status,
+            remark="验收通过，闭环" if passed else f"验收驳回：{h.reject_reason}",
+            commit=False,
+        )
+        db.commit()
+        db.refresh(h)
+        from ..utils.audit import write_audit
+        write_audit(db, user, "hazard_check", target_type="hazard", target_id=hid,
+                    detail=f"hazard_no={h.hazard_no} passed={passed}")
+        return {"message": "验收通过，已闭环" if passed else "已驳回",
+                "hazard_no": h.hazard_no, "status": h.status}
+
     # ---------- 组装 ----------
 
     @staticmethod
     def _detail(db: Session, h: Hazard, user: User) -> dict:
-        names = HazardService._user_names(db, {h.creator_id})
+        names = HazardService._user_names(db, {h.creator_id, h.handler_id or 0})
         images = HazardRepo.get_images(db, h.id)
         logs = HazardRepo.get_logs(db, h.id)
         op_names = HazardService._user_names(db, {lg.operator_id for lg in logs})
@@ -179,8 +294,9 @@ class HazardService:
             "status": h.status,
             "creator_id": h.creator_id,
             "creator_name": names.get(h.creator_id, ""),
-            # H04–H06 预留字段（本期恒空，详情展示占位）
+            # H04–H06 处理链路字段
             "handler_id": h.handler_id,
+            "handler_name": names.get(h.handler_id or 0, ""),
             "deadline": h.deadline.isoformat() if h.deadline else None,
             "rectification_measure": h.rectification_measure,
             "rectification_images": h.rectification_images,

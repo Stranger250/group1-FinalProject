@@ -84,19 +84,22 @@ def build_generate_prompt(
     allocation: list[tuple[str, int]] | None = None,
     reference_text: str | None = None,
     reference_title: str | None = None,
+    rejected_examples: list[dict] | None = None,
 ) -> tuple[str, str]:
     """构造出题 Prompt，返回 (system, user)。
 
     - knowledge_point：知识点，必填（提供 reference_text 时可用文档限定出题范围）；
     - articles：检索到的条款列表，每项含 law_title / article_no / content；
-    - types：题型列表（SINGLE/MULTIPLE/JUDGE/FILL），按序分配数量；
+    - types：题型列表（SINGLE/MULTIPLE/JUDGE/FILL/SUBJECTIVE），按序分配数量；
     - difficulty：难度（EASY/MEDIUM/HARD），统一转大写；
     - count：总题数（约定 >= 5，见 AI_SOLUTION §6 / settings.gen_min_count）；
     - allocation（keyword-only）：显式题型配额 [(type, n), …]（分轮生成时传入本轮配额，
       各轮求和即全局配额）；缺省按 _allocate(types, count) 自动分配，输出与旧版完全一致（回归安全）；
     - reference_text/reference_title（keyword-only）：上传参考文档的文本与文件名，
       有值时在 user prompt 插入【参考文档】块限定本次出题范围，并追加出题要求 8-10；
-      缺省时输出与旧版完全一致（回归安全）。
+      缺省时输出与旧版完全一致（回归安全）；
+    - rejected_examples（keyword-only）：过往审核驳回的反例（负样本回流，_drafts/4 §5），
+      非空时在 user prompt 插入【过往驳回反例】块，要求规避同类问题；缺省时输出与旧版完全一致。
     """
     knowledge_point = (knowledge_point or "").strip()
     if not knowledge_point:
@@ -130,6 +133,21 @@ def build_generate_prompt(
             f"source_article_no 填（上传参考文档）。\n"
         )
 
+    # 负样本回流：过往驳回反例（_drafts/4 §5）——要求规避同类问题
+    rejected_block = ""
+    rejected_rules = ""
+    if rejected_examples:
+        lines = []
+        for i, ex in enumerate(rejected_examples, 1):
+            note = (ex.get("review_note") or "").strip()
+            body = (ex.get("content") or "").strip()
+            lines.append(f"{i}. 题面：{body[:80]}" + (f"｜驳回原因：{note[:80]}" if note else ""))
+        rejected_block = "\n\n【过往驳回反例（出题时须规避的同类问题）】\n" + "\n".join(lines)
+        rejected_rules = (
+            f"11. 上述题目曾因同类问题被审核驳回，本次出题【不得】出现与之相同或高度相似的"
+            f"题干、选项设计或答案表述；如确需考查同一知识点，请换角度重述。\n"
+        )
+
     if ref_text:
         # 有参考文档：文档与法规条款共同作为出题依据
         system = (
@@ -150,7 +168,8 @@ def build_generate_prompt(
     user = (
         f"【任务】请为「{knowledge_point}」知识点生成 {count} 道安全生产考试题，难度：{difficulty}。\n\n"
         f"【检索到的法规条款】\n{articles_text}"
-        f"{ref_block}\n\n"
+        f"{ref_block}"
+        f"{rejected_block}\n\n"
         f"【题型与数量】\n{allocation_text}。\n\n"
         f"【出题要求】\n"
         f"1. 每道题严格依据上述条款出题，题干可适度情境化，但答案与解析必须有条款依据；"
@@ -170,7 +189,8 @@ def build_generate_prompt(
         f"6. 每题 source_law_title / source_article_no 为本题主要依据，"
         f"必须与 sources 中 answer（或 analysis）项的 law_title / article_no 一致。\n"
         f"7. 知识点统一填「{knowledge_point}」，难度填 {difficulty}。\n"
-        f"{ref_rules}\n"
+        f"{ref_rules}"
+        f"{rejected_rules}"
         f"【输出 JSON 结构（严格按此结构，不要增减字段）】\n{_json_schema()}\n\n"
         f"只输出 JSON，不要 Markdown，不要额外说明。"
     )

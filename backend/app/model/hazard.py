@@ -48,12 +48,13 @@ class HazardType:
 
 
 class HazardLogOperation:
-    """处理留痕操作（hazard_log.operation，DATABASE.md §4.4：提交/派单/整改/验收/驳回）。
-
-    本期 H01–H03 只产生「提交」与「闭环」两类；派单/整改/验收/驳回为 H04–H06 预留。
-    """
+    """处理留痕操作（hazard_log.operation，DATABASE.md §4.4：提交/派单/整改/验收/驳回）。"""
 
     SUBMIT = "提交"
+    DISPATCH = "派单"
+    RECTIFY = "整改"
+    ACCEPT = "验收"
+    REJECT = "驳回"
     CLOSE = "闭环"
 
 

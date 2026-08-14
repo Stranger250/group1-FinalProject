@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 import uuid
 
+import jieba
+
 from fastapi import HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy import case, func, select
@@ -104,6 +106,49 @@ def _normalize_sources(raw, title: str, article_no: str) -> list[dict]:
     if not any(x["law_title"] == title and x["article_no"] == article_no for x in out):
         out.insert(0, {"role": "answer", "law_title": title, "article_no": article_no})
     return out
+
+
+def _verify_distractor_grounding(
+    options: list[str] | None, articles: list[dict], answer: str
+) -> bool:
+    """干扰项溯源自动校验（_drafts/4-AI出题专项 §4 落地）。
+
+    对 SINGLE/MULTIPLE 的每个【干扰项】（非答案标签项），检查其文本是否在检索条款
+    content 中存在关键片段（≥4 字的连续子串或 ≥2 个 ≥2 字关键词命中）。
+    全部干扰项都无依据 → 返回 False（调用方不置 interference_verified，交由人工核对）；
+    至少一个干扰项有依据 → True（自动置位 interference_verified=1）。
+
+    判断依据：选项正文（去掉字母前缀）与条款全文做子串/关键词重叠检查。
+    """
+    if not options:
+        return True  # 无选项题型（判断/填空/解答）无干扰项概念，直接视为通过
+    ans_labels = {p.strip().upper() for p in answer.replace("，", ",").split(",") if p.strip()}
+    article_text = " ".join(a.get("content") or "" for a in articles)
+    if not article_text:
+        return False
+    grounded = 0
+    total = 0
+    for opt in options:
+        body = re.sub(r"^[A-Za-z][.、．)）\s:：]*", "", opt).strip()
+        if not body:
+            continue
+        # 跳过答案标签对应的选项（只校验干扰项）
+        label_m = re.match(r"^([A-Za-z])[.、．)）\s:：]", opt)
+        if label_m and label_m.group(1).upper() in ans_labels:
+            continue
+        total += 1
+        # 关键片段：≥4 字连续子串在条款中出现
+        if len(body) >= 4 and body[:4] in article_text:
+            grounded += 1
+            continue
+        # 关键词：jieba 分词后 ≥2 字词至少 2 个命中条款
+        words = [w for w in jieba.lcut(body) if len(w) >= 2 and w.strip()]
+        hits = sum(1 for w in words if w in article_text)
+        if hits >= 2:
+            grounded += 1
+    if total == 0:
+        return True  # 全是答案项（如只有 2 选项的题），无干扰项可校验
+    return grounded >= 1
 
 
 def _plan_chunks(allocation: list[tuple[str, int]], chunk_size: int) -> list[list[tuple[str, int]]]:
@@ -219,10 +264,12 @@ class GenService:
 
         # 1) 检索：优先限定法规，无结果则降级全库检索（top_k 放宽）。
         #    有参考文档时检索词取知识点或文档前 64 字；仍无结果允许仅凭文档出题。
+        #    难度过滤：按 payload.difficulty 优先取同难度条款（_drafts/4 §3 落地）。
         search_term = kp or ref[:64]
-        articles = corpus.search(search_term, top_k=6, law_title=payload.law_title)
+        articles = corpus.search(search_term, top_k=6, law_title=payload.law_title,
+                                 difficulty=payload.difficulty)
         if not articles:
-            articles = corpus.search(search_term, top_k=8)
+            articles = corpus.search(search_term, top_k=8, difficulty=payload.difficulty)
         if not articles and ref:
             articles = []  # 有参考文档时允许仅凭文档出题
         if not articles:
@@ -242,6 +289,9 @@ class GenService:
         n_plans = len(plans)
 
         # 3) LLM 生成 + Pydantic 校验：解析失败或题量不足自动重试，仍失败抛 502
+        #    负样本回流（_drafts/4 §5）：注入最近驳回反例，规避同类问题
+        from ..ai.rejected_examples import load_recent_examples
+        rejected_examples = load_recent_examples()
         questions: list[GenQuestion] = []
         for plan_i, plan in enumerate(plans, 1):
             plan_total = sum(n for _, n in plan)
@@ -254,6 +304,7 @@ class GenService:
                 allocation=plan,
                 reference_text=ref or None,
                 reference_title=ref_title or None,
+                rejected_examples=rejected_examples or None,
             )
             # 单轮沿用「≥gen_min_count」的宽松验收（旧版行为不变）；
             # 分轮时须凑够本轮配额，否则整批题量不符预期。
@@ -346,6 +397,9 @@ class GenService:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="溯源法规不在知识库")
             sources = _normalize_sources(data.get("sources"), src_title, src_article_no)
 
+            # 干扰项溯源自动校验（_drafts/4 §4）：干扰项在检索条款中有依据 → 自动置位
+            interference_verified = 1 if _verify_distractor_grounding(options, articles, answer) else 0
+
             # 5) 入库（统一在循环后批量落库）：source=ai、status=PENDING、同批 batch_id、sources 存 JSON 列表
             prepared.append(
                 {
@@ -361,6 +415,7 @@ class GenService:
                     "sources": sources,
                     "source_law_title": src_title,
                     "source_article_no": src_article_no,
+                    "interference_verified": interference_verified,
                     "status": QuestionStatus.PENDING,
                 }
             )

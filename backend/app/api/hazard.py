@@ -25,7 +25,7 @@ from ..core.config import get_settings
 from ..core.database import get_db  # noqa: F401  # 与 Session 一起构成 get_db 依赖类型标注
 from ..core.security import get_current_user, require_roles
 from ..model.user import RoleId, User
-from ..schema.hazard import HazardCreate
+from ..schema.hazard import HazardCheckIn, HazardCreate, HazardDispatchIn, HazardRectifyIn
 from ..service.hazard_service import HazardService
 from ..utils.response import resp
 from ..utils.upload import save_image_upload
@@ -144,6 +144,41 @@ def close_hazard(
 ):
     """待处理 → 已闭环，落时间线日志（old→new 留痕）。"""
     return resp(HazardService.close(db, hid, user))
+
+
+# ---------- H04 派单 / H05 整改 / H06 验收 ----------
+
+@router.post("/{hid}/dispatch", summary="H04 派单：指定整改负责人与期限（SAFETY/ADMIN）")
+def dispatch_hazard(
+    hid: int,
+    payload: HazardDispatchIn,
+    user: User = Depends(_MANAGE),
+    db: Session = Depends(get_db),
+):
+    """待处理 → 处理中，落派单人/负责人/期限与时间线日志。"""
+    return resp(HazardService.dispatch(db, hid, user, **payload.model_dump()))
+
+
+@router.post("/{hid}/rectify", summary="H05 整改反馈：提交整改措施与照片")
+def rectify_hazard(
+    hid: int,
+    payload: HazardRectifyIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """处理中 → 待验收（整改负责人本人或 SAFETY/ADMIN），落整改内容与时间线日志。"""
+    return resp(HazardService.rectify(db, hid, user, **payload.model_dump()))
+
+
+@router.post("/{hid}/check", summary="H06 验收：通过闭环 / 驳回（SAFETY/ADMIN）")
+def check_hazard(
+    hid: int,
+    payload: HazardCheckIn,
+    user: User = Depends(_MANAGE),
+    db: Session = Depends(get_db),
+):
+    """待验收 → 已闭环（通过）或已驳回（不通过需原因），落时间线日志。"""
+    return resp(HazardService.check(db, hid, user, **payload.model_dump()))
 
 
 # ---------- 文件落盘 ----------

@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -43,3 +44,36 @@ class VisionResult(BaseModel):
     description: str = Field(default="", max_length=2000)      # 图片内容描述
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)     # 模型置信度
     report: dict = Field(default_factory=dict)                 # 原始识别报告（透传落库）
+
+
+class HazardDispatchIn(BaseModel):
+    """H04 派单请求体：指定整改负责人与整改期限。
+
+    handler_id 必须存在（service 校验用户存在且启用）；deadline 可选（未填则不设整改期限）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    handler_id: int = Field(ge=1)
+    deadline: datetime | None = Field(default=None)
+
+
+class HazardRectifyIn(BaseModel):
+    """H05 整改反馈请求体：整改措施必填，整改后照片 URL 可选（≤9 张）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rectification_measure: str = Field(min_length=1, max_length=2000)
+    rectification_images: list[str] = Field(default_factory=list, max_length=9)
+
+
+class HazardCheckIn(BaseModel):
+    """H06 验收请求体：通过（FINISHED）或驳回（REJECTED，必须填写原因）。
+
+    passed=True 验收通过闭环；passed=False 需填 reject_reason（400 拦截无原因驳回）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    passed: bool
+    reject_reason: str | None = Field(default=None, max_length=255)
