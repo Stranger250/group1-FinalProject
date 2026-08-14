@@ -1,0 +1,107 @@
+"""模块一 隐患安全管理 ORM 模型（对应 schema.sql 的 3 张隐患表，对齐 DATABASE.md §4）。
+
+hazard 隐患主表 / hazard_image 隐患图片 / hazard_log 处理留痕（H03 时间线）。
+全部逻辑外键（无物理外键），风格照 model/chat.py：Mapped + BigInteger + func.now() + 模块级常量类。
+
+本期范围 H01–H03：状态只流转 WAIT_PROCESS → FINISHED（PRD 简化闭环）；
+PROCESSING/WAIT_CHECK/REJECTED 及 handler_id/deadline/rectification_* 是 H04–H06 预留字段，本期不写。
+risk_report（JSON）为 H01 AI 图片识别报告预留，本期由视觉模型写入。
+"""
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import JSON, BigInteger, DateTime, String, Text, func, text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from ..core.database import Base
+
+
+class HazardStatus:
+    """隐患状态（hazard.status，DATABASE.md §4.1）。"""
+
+    WAIT_PROCESS = "WAIT_PROCESS"  # 待处理（提交后初始态）
+    PROCESSING = "PROCESSING"      # 处理中（H04 派单后，本期预留）
+    WAIT_CHECK = "WAIT_CHECK"      # 待验收（H05 整改后，本期预留）
+    FINISHED = "FINISHED"          # 已闭环
+    REJECTED = "REJECTED"          # 已驳回（本期预留）
+
+
+class HazardLevel:
+    """隐患等级（hazard.level，DATABASE.md §4.1）。"""
+
+    CRITICAL = "CRITICAL"  # 重大：可能导致重大安全事故，需立即整改
+    MAJOR = "MAJOR"        # 较大：可能导致较大安全事故，限期整改
+    GENERAL = "GENERAL"    # 一般：一般性问题，常规整改
+    MINOR = "MINOR"        # 轻微：轻微问题，建议整改
+
+
+class HazardType:
+    """隐患类型（hazard.type，DATABASE.md §4.1：按企业分类维护，示例清单）。"""
+
+    HIGH_ALTITUDE = "高处作业"
+    ELECTRICAL = "用电安全"
+    MECHANICAL = "机械伤害"
+    FIRE = "消防"
+    EDGE = "临边防护"
+    OTHER = "其他"
+
+
+class HazardLogOperation:
+    """处理留痕操作（hazard_log.operation，DATABASE.md §4.4：提交/派单/整改/验收/驳回）。
+
+    本期 H01–H03 只产生「提交」与「闭环」两类；派单/整改/验收/驳回为 H04–H06 预留。
+    """
+
+    SUBMIT = "提交"
+    CLOSE = "闭环"
+
+
+class Hazard(Base):
+    __tablename__ = "hazard"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    hazard_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)  # 唯一编号，提交时生成
+    title: Mapped[str] = mapped_column(String(128), nullable=False)  # 自动取描述前 20 字
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    location: Mapped[str] = mapped_column(String(128), nullable=False)  # 可空上报 → 默认「未填写」
+    level: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default=HazardStatus.WAIT_PROCESS,
+        server_default=text("'WAIT_PROCESS'"), index=True, nullable=False,
+    )
+    creator_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)  # 上报人 → user.id
+    handler_id: Mapped[int | None] = mapped_column(BigInteger, index=True)  # 整改负责人（H04 预留）
+    deadline: Mapped[datetime | None] = mapped_column(DateTime)  # 整改期限（H04 预留）
+    rectification_measure: Mapped[str | None] = mapped_column(Text)  # 整改措施（H05 预留）
+    rectification_images: Mapped[str | None] = mapped_column(Text)  # 整改后照片 URL（H05 预留）
+    reject_reason: Mapped[str | None] = mapped_column(String(255))  # 驳回原因（H06 预留）
+    risk_report: Mapped[dict | None] = mapped_column(JSON)  # AI 图片识别报告（标签/置信度/建议）
+    create_time: Mapped[datetime] = mapped_column(DateTime, index=True, server_default=func.now())
+    update_time: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class HazardImage(Base):
+    __tablename__ = "hazard_image"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    hazard_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    image_url: Mapped[str] = mapped_column(String(255), nullable=False)  # /uploads/... 相对路径
+    uploader_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class HazardLog(Base):
+    __tablename__ = "hazard_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    hazard_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    operator_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)  # 提交/闭环（本期）
+    old_status: Mapped[str | None] = mapped_column(String(16))
+    new_status: Mapped[str | None] = mapped_column(String(16))
+    remark: Mapped[str | None] = mapped_column(String(255))
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

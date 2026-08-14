@@ -14,3 +14,14 @@ crawler_output/_raw_*.txt
 
 # ===== 知识库构建产物（scripts/build_knowledge_base.py 可再生，不入库）=====
 backend/data/chroma_kb/
+
+# ===== 模块一 隐患图片上传（运行期产物，不入库）=====
+backend/data/uploads/
+
+# ===== 运行期日志（*.txt 后缀绕过了上面的 *.log 规则）=====
+backend/logs_*
+
+# ===== 本地工具配置 / 测试素材 / 备份包（不入库）=====
+.claude/
+施工现场隐患图片/
+docs.zip

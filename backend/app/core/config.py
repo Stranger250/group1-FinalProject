@@ -51,6 +51,25 @@ class Settings(BaseSettings):
     model_name: str = ""
     law_json_dir: str = "../crawler_output"
     gen_min_count: int = 5
+    # AI 出题单次请求上限（schema/ai.py 校验真源）。模型单次输出 token 有上限，
+    # 超出 20 题由 gen_service 分轮生成（每轮 ≤ gen_chunk_size，合并进同一 batch）。
+    gen_max_count: int = 50
+    # 分轮生成单轮题量：20 为实测安全上限（单轮输出 ~1.2 万字符 ≈ 1 万+ token，已被 20 题批次证明可行）
+    gen_chunk_size: int = 20
+
+    # ===== 模块一 隐患视觉识别（阿里云百炼 OpenAI 兼容端点，H01 图片识别）=====
+    # 与 E02/A01 的 LLM（base_url/api_key/model_name）隔离，独立 VISION_* 配置，
+    # 三个值在 backend/.env 填写（gitignored），任一为空即视觉识别不可用（analyze 降级 503）。
+    vision_base_url: str = ""
+    vision_api_key: str = ""
+    vision_model_name: str = ""
+    # 图片上传（B03）：本地磁盘存储，经 main.py 挂载的 /uploads 静态访问；
+    # 目录在 backend/data/uploads（已 gitignore），按日期分子目录防单目录文件过多
+    upload_dir: str = str(Path(__file__).resolve().parents[2] / "data" / "uploads")
+    max_upload_mb: float = 5.0          # 单文件大小上限（PRD B03）
+    hazard_no_prefix: str = "HZ"        # 隐患编号前缀，如 HZ20260813-0001
+    # AI 出题参考文档文本截断上限（E02：上传培训手册/制度文件限定出题范围，纯文本不落盘）
+    ref_doc_max_chars: int = 5000
 
     # ===== 模块二 AI 助手 RAG（M1 建库 / M2 检索 / M3 问答）=====
     # 本地模型/向量库均在实训根环境（仓库根），用绝对路径规避 transformers 5.14.1 相对路径 HFValidationError
