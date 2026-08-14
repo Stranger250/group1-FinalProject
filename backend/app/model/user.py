@@ -40,6 +40,9 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(64))
     role_id: Mapped[int] = mapped_column(BigInteger)
     phone: Mapped[str | None] = mapped_column(String(20))
+    # 个人中心（T2）：邮箱 / 头像 URL（/uploads/...，前端经 vite 代理访问）；由 _migrate_user_profile 幂等补列
+    email: Mapped[str | None] = mapped_column(String(120))
+    avatar: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[int] = mapped_column(mysql.TINYINT, default=1, server_default=text("1"), nullable=False)
     created_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_time: Mapped[datetime] = mapped_column(

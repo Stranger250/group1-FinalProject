@@ -16,12 +16,15 @@ import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from .api import ai, auth, chat, exam, exam_running, paper
+from fastapi.staticfiles import StaticFiles
+from .api import ai, auth, chat, exam, exam_running, hazard, paper, user
+from .core.config import get_settings
 from .rag.embedder import get_embedder
 from .rag.reranker import get_reranker
 from .rag.retriever import get_retriever
@@ -60,10 +63,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="蜀道安全助手 API",
-    description="模块三 考试工坊（E01-E05）+ 模块二 AI 智能助手（A01-A07）后端接口",
+    description="模块一 隐患安全管理（H01-H03）+ 模块二 AI 智能助手（A01-A07）+ 模块三 考试工坊（E01-E05）后端接口",
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# 隐患图片上传目录（B03）：目录不存在则先创建（StaticFiles 要求目录已存在），
+# 目录本身在 backend/data/uploads（.gitignore，构建产物不入库）
+_upload_dir = Path(get_settings().upload_dir)
+_upload_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_upload_dir)), name="uploads")
 
 # 开发环境放开跨域；生产按 ARCHITECTURE §10 收紧
 app.add_middleware(
@@ -80,6 +89,8 @@ app.include_router(ai.router)
 app.include_router(paper.router)
 app.include_router(exam_running.router)
 app.include_router(chat.router)
+app.include_router(hazard.router)
+app.include_router(user.router)
 
 
 @app.exception_handler(HTTPException)

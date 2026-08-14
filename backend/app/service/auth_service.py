@@ -1,4 +1,4 @@
-"""认证业务：注册、登录、签发 JWT。"""
+"""认证业务：注册、登录、签发 JWT、个人中心（资料/改密码/头像）。"""
 from __future__ import annotations
 
 from fastapi import HTTPException, status
@@ -40,6 +40,40 @@ class AuthService:
         token = create_access_token(user.id)
         return {"access_token": token, "token_type": "bearer", "user": _user_payload(user)}
 
+    @staticmethod
+    def me(user) -> dict:
+        """当前用户资料（个人中心初始化 / 会话恢复）。"""
+        return _user_payload(user)
+
+    @staticmethod
+    def update_profile(db: Session, user, *, name: str, phone: str | None, email: str | None) -> dict:
+        """修改个人资料（姓名/手机号/邮箱）。用户名是登录键，不可改。"""
+        user.name = name
+        user.phone = phone
+        user.email = email
+        db.commit()
+        db.refresh(user)
+        return _user_payload(user)
+
+    @staticmethod
+    def update_avatar(db: Session, user, avatar_url: str) -> dict:
+        """更新头像 URL（图片已由 upload 落盘）。"""
+        user.avatar = avatar_url
+        db.commit()
+        db.refresh(user)
+        return _user_payload(user)
+
+    @staticmethod
+    def change_password(db: Session, user, *, old_password: str, new_password: str) -> None:
+        """修改密码：校验原密码；新旧相同拒绝；成功即令旧 JWT 在新请求中仍有效（状态未变）。"""
+        if not verify_password(old_password, user.password):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="原密码不正确")
+        if new_password == old_password:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="新密码不能与原密码相同")
+        user.password = hash_password(new_password)
+        db.commit()
+        db.refresh(user)
+
 
 def _user_payload(user) -> dict:
     return {
@@ -48,4 +82,8 @@ def _user_payload(user) -> dict:
         "name": user.name,
         "role_id": user.role_id,
         "phone": user.phone,
+        "email": user.email,
+        "avatar": user.avatar,
+        "created_time": user.created_time,
+        "updated_time": user.updated_time,
     }
