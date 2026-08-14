@@ -57,6 +57,9 @@
             <div>B. 错误</div>
           </div>
         </template>
+        <template v-else-if="form.type === 'SUBJECTIVE'">
+          <span class="option-tip">解答题无选项，请直接在「答案」中填写参考答案要点</span>
+        </template>
         <template v-else>
           <span class="option-tip">填空题无固定选项，请直接填写答案</span>
         </template>
@@ -84,6 +87,17 @@
             <el-radio value="A">A. 正确</el-radio>
             <el-radio value="B">B. 错误</el-radio>
           </el-radio-group>
+        </template>
+        <template v-else-if="form.type === 'SUBJECTIVE'">
+          <el-input
+            v-model="answerSubjective"
+            type="textarea"
+            :rows="4"
+            maxlength="2000"
+            show-word-limit
+            placeholder="填写参考答案，多个要点用分号（;）分隔，如：必须佩戴安全帽；高处作业必须系安全带"
+          />
+          <div class="field-tip">自动阅卷按要点包含命中计分：考生作答包含某要点即得该要点分</div>
         </template>
         <template v-else>
           <el-input v-model="answerFill" placeholder="填空答案，多空用分号（;）分隔" maxlength="64" style="width: 100%" />
@@ -187,6 +201,7 @@ const form = reactive<FormState>({
 const answerSingle = ref('')
 const answerMultiple = ref<string[]>([])
 const answerFill = ref('')
+const answerSubjective = ref('')
 const submitting = ref(false)
 const formRef = ref<FormInstance>()
 
@@ -203,7 +218,9 @@ function resetForm(): void {
     form.type = q.type
     form.content = q.content ?? ''
     form.options =
-      q.type === 'FILL' ? [] : (q.options ?? (q.type === 'JUDGE' ? ['正确', '错误'] : ['', '']))
+      q.type === 'FILL' || q.type === 'SUBJECTIVE'
+        ? []
+        : (q.options ?? (q.type === 'JUDGE' ? ['正确', '错误'] : ['', '']))
     form.analysis = q.analysis ?? ''
     form.knowledge_point = q.knowledge_point ?? ''
     form.difficulty = q.difficulty
@@ -220,6 +237,7 @@ function resetForm(): void {
             .filter(Boolean)
         : []
     answerFill.value = q.type === 'FILL' ? q.answer : ''
+    answerSubjective.value = q.type === 'SUBJECTIVE' ? q.answer : ''
   } else {
     form.type = 'SINGLE'
     form.content = ''
@@ -233,6 +251,7 @@ function resetForm(): void {
     answerSingle.value = ''
     answerMultiple.value = []
     answerFill.value = ''
+    answerSubjective.value = ''
   }
   formRef.value?.clearValidate()
 }
@@ -244,6 +263,7 @@ watch(
     answerSingle.value = ''
     answerMultiple.value = []
     answerFill.value = ''
+    answerSubjective.value = ''
     formRef.value?.clearValidate()
   },
 )
@@ -262,9 +282,9 @@ function removeOption(i: number): void {
   answerMultiple.value = answerMultiple.value.filter((x) => x !== String.fromCharCode(65 + i))
 }
 
-/** 构建选项数组（补字母前缀；判断固定；填空为 null） */
+/** 构建选项数组（补字母前缀；判断固定；填空/解答为 null） */
 function buildOptions(): string[] | null {
-  if (form.type === 'FILL') return null
+  if (form.type === 'FILL' || form.type === 'SUBJECTIVE') return null
   if (form.type === 'JUDGE') return ['A 正确', 'B 错误']
   return form.options.map((t, i) => `${String.fromCharCode(65 + i)}. ${t.trim()}`)
 }
@@ -273,6 +293,7 @@ function buildAnswer(): string {
   if (form.type === 'SINGLE') return answerSingle.value.trim().toUpperCase()
   if (form.type === 'MULTIPLE') return answerMultiple.value.map((x) => x.toUpperCase()).join(',')
   if (form.type === 'JUDGE') return answerSingle.value.trim().toUpperCase()
+  if (form.type === 'SUBJECTIVE') return answerSubjective.value.trim()
   return answerFill.value.trim()
 }
 
@@ -300,6 +321,10 @@ function answerValid(): boolean {
     return ans.split(',').every((p) => letters.includes(p))
   }
   if (form.type === 'JUDGE') return ans === 'A' || ans === 'B'
+  if (form.type === 'SUBJECTIVE') {
+    // 解答题：参考答案分号分隔要点，每要点非空
+    return ans.split(/[;；]/).every((p) => !!p.trim())
+  }
   // FILL：多空用分号分隔，每空非空
   return ans.split(/[;；]/).every((b) => !!b.trim())
 }

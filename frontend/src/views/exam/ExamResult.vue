@@ -71,6 +71,7 @@
             <span class="q-seq">第 {{ q.seq }} 题</span>
             <span class="q-score">{{ q.score }} 分</span>
             <el-tag v-if="q.is_correct" size="small" type="success">答对</el-tag>
+            <el-tag v-else-if="q.type === 'SUBJECTIVE' && q.score > 0" size="small" type="warning">部分得分</el-tag>
             <el-tag v-else size="small" type="danger">答错</el-tag>
           </div>
 
@@ -154,6 +155,8 @@ function typeTag(t: QuestionType): 'primary' | 'success' | 'warning' | 'info' | 
       return 'warning'
     case 'FILL':
       return 'info'
+    case 'SUBJECTIVE':
+      return 'danger'
   }
 }
 

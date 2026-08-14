@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """并发专项测试（真实 MySQL，TEST_PLAN §2.2 关键用例）：
   1. 并发双交只评一次（分数一致、无重复评分）
   2. 并发 start 同卷：只产生一条 ONGOING（uk_user_paper_ongoing）
@@ -18,7 +18,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 import httpx
 
-BASE = "http://127.0.0.1:8000/api/v1"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000/api/v1")
 PASS = 0
 FAIL = 0
 FAILURES: list[str] = []

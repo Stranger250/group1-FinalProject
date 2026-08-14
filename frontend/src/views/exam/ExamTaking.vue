@@ -99,6 +99,20 @@
                 @update:model-value="fillUpdater(i)"
               />
             </div>
+
+            <!-- SUBJECTIVE 解答题 -->
+            <div v-else-if="isSubjective" class="subjective-wrap">
+              <div class="fill-hint">请完整作答，涵盖参考答案要点即可得分（按要点包含计分）</div>
+              <el-input
+                :model-value="currentAnswered"
+                type="textarea"
+                :rows="6"
+                maxlength="2000"
+                show-word-limit
+                placeholder="请输入你的解答…"
+                @update:model-value="onSubjectiveChange"
+              />
+            </div>
           </div>
 
           <div class="q-footer">
@@ -162,6 +176,7 @@ const isSingle = computed(() => currentQuestion.value?.type === 'SINGLE')
 const isMultiple = computed(() => currentQuestion.value?.type === 'MULTIPLE')
 const isJudge = computed(() => currentQuestion.value?.type === 'JUDGE')
 const isFill = computed(() => currentQuestion.value?.type === 'FILL')
+const isSubjective = computed(() => currentQuestion.value?.type === 'SUBJECTIVE')
 
 const currentAnswered = computed(() => {
   const q = currentQuestion.value
@@ -213,6 +228,8 @@ function typeTag(t: QuestionType): 'primary' | 'success' | 'warning' | 'info' | 
       return 'warning'
     case 'FILL':
       return 'info'
+    case 'SUBJECTIVE':
+      return 'danger'
   }
 }
 
@@ -262,6 +279,12 @@ function onFillChange(idx: number, v: string) {
   const arr = currentFill.value
   arr[idx] = v
   setAnswer(q.id, arr.join(';'))
+}
+
+function onSubjectiveChange(v: string | null) {
+  const q = currentQuestion.value
+  if (!q) return
+  setAnswer(q.id, v ?? '')
 }
 
 /** el-input update:model-value → 归一到字符串的处理器工厂 */

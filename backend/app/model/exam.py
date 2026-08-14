@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, text
+from sqlalchemy import BigInteger, DateTime, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,7 +54,8 @@ class ExamAnswer(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     record_id: Mapped[int] = mapped_column(BigInteger)
     question_id: Mapped[int] = mapped_column(BigInteger)
-    user_answer: Mapped[str] = mapped_column(String(255))  # 规范化后作答（未作答=''）
-    correct_answer: Mapped[str] = mapped_column(String(255))
+    # 解答题作答可达数百字：从 VARCHAR(255) 扩为 TEXT（schema.sql 与 init_db 迁移同步）
+    user_answer: Mapped[str] = mapped_column(Text)  # 规范化后作答（未作答=''）
+    correct_answer: Mapped[str] = mapped_column(Text)
     is_correct: Mapped[int] = mapped_column(mysql.TINYINT, default=0)
     score: Mapped[int] = mapped_column(Integer, default=0)

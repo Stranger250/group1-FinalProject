@@ -35,7 +35,7 @@
 
       <div class="qc-content markdown-body" v-html="renderMarkdown(question.content)" />
 
-      <div v-if="question.type !== 'FILL' && optionList.length" class="qc-options">
+      <div v-if="question.type !== 'FILL' && question.type !== 'SUBJECTIVE' && optionList.length" class="qc-options">
         <div v-for="(opt, i) in optionList" :key="i" class="qc-option">
           <span class="qc-opt-letter">{{ optionLetter(opt) || String.fromCharCode(65 + i) }}</span>
           <span class="qc-opt-text">{{ optionBody(opt) }}</span>
@@ -156,6 +156,9 @@ const answerText = computed<string>(() => {
   }
   if (q.type === 'FILL') {
     return q.answer.replace(/[;；]/g, '；')
+  }
+  if (q.type === 'SUBJECTIVE') {
+    return `（要点判分）${q.answer.replace(/[;；]/g, '；')}`
   }
   return q.answer
 })

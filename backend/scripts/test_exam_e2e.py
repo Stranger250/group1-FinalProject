@@ -1,4 +1,4 @@
-"""E04 在线考试 + E05 自动阅卷 端到端测试（对齐设计评审 testMatrix A1-A13）。
+﻿"""E04 在线考试 + E05 自动阅卷 端到端测试（对齐设计评审 testMatrix A1-A13）。
 
 前置：后端已在 8000 端口运行（uvicorn app.main:app --reload），MySQL shudao 库就绪。
 
@@ -28,7 +28,7 @@ if hasattr(sys.stdout, "reconfigure"):
 # 脚本位于 backend/scripts/，把 backend 根加入 sys.path 以便 import app.*
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-BASE = "http://127.0.0.1:8000/api/v1"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000/api/v1")
 FAILURES: list[str] = []
 
 

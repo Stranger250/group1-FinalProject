@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-QuestionType = Literal["SINGLE", "MULTIPLE", "JUDGE", "FILL"]
+QuestionType = Literal["SINGLE", "MULTIPLE", "JUDGE", "FILL", "SUBJECTIVE"]
 QuestionDifficulty = Literal["EASY", "MEDIUM", "HARD"]
 QuestionStatus = Literal["PENDING", "APPROVED", "REJECTED", "DISABLED"]
 QuestionSource = Literal["manual", "ai"]
@@ -16,7 +16,8 @@ class QuestionCreate(BaseModel):
     type: QuestionType
     content: str = Field(min_length=1)
     options: list[str] | None = None
-    answer: str = Field(min_length=1, max_length=64)
+    # 解答题参考答案可达数百字，放宽上限（VARCHAR(64) → TEXT 已同步）
+    answer: str = Field(min_length=1, max_length=2000)
     analysis: str = Field(min_length=1)  # PRD E01：正确答案与解析必填
     knowledge_point: str = Field(min_length=1, max_length=128)
     difficulty: QuestionDifficulty
@@ -28,7 +29,7 @@ class QuestionUpdate(BaseModel):
     type: QuestionType | None = None
     content: str | None = Field(default=None, min_length=1)
     options: list[str] | None = None
-    answer: str | None = Field(default=None, min_length=1, max_length=64)
+    answer: str | None = Field(default=None, min_length=1, max_length=2000)
     analysis: str | None = Field(default=None, min_length=1)
     knowledge_point: str | None = Field(default=None, min_length=1, max_length=128)
     difficulty: QuestionDifficulty | None = None

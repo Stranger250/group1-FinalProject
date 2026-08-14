@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS question (
   type                  VARCHAR(16)  NOT NULL,
   content               TEXT         NOT NULL,
   options               JSON         NULL,
-  answer                VARCHAR(64)  NOT NULL,
+  answer                TEXT         NOT NULL COMMENT '客观题答案/解答题参考答案（分号分隔要点）',
   analysis              TEXT         NULL,
   knowledge_point       VARCHAR(128) NOT NULL,
   difficulty            VARCHAR(16)  NOT NULL,
@@ -239,10 +239,26 @@ CREATE TABLE IF NOT EXISTS exam_answer (
   id             BIGINT AUTO_INCREMENT PRIMARY KEY,
   record_id      BIGINT       NOT NULL,
   question_id    BIGINT       NOT NULL,
-  user_answer    VARCHAR(255) NOT NULL,
-  correct_answer VARCHAR(255) NOT NULL,
+  user_answer    TEXT         NOT NULL COMMENT '考生作答（解答题可达数百字）',
+  correct_answer TEXT         NOT NULL COMMENT '判分快照（解答题为参考答案）',
   is_correct     TINYINT      NOT NULL,
   score          INT          NOT NULL,
   KEY idx_record (record_id),
   UNIQUE KEY uk_record_question (record_id, question_id)
+) ENGINE = InnoDB;
+
+-- 关键操作审计日志表（ARCHITECTURE §5.4/§10 审计：登录/闭环/审核/发布/用户管理等关键操作留痕）
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id     BIGINT       NOT NULL COMMENT '操作人',
+  username    VARCHAR(64)  NULL COMMENT '操作人用户名（操作人可能被删/禁用，冗余留痕）',
+  action      VARCHAR(64)  NOT NULL COMMENT '动作，如 login/hazard_close/question_review/paper_publish/user_update',
+  target_type VARCHAR(32)  NULL COMMENT '对象类型，如 user/hazard/question/paper/exam_record',
+  target_id   VARCHAR(64)  NULL COMMENT '对象 id（字符串兼容各表 id）',
+  detail      VARCHAR(500) NULL COMMENT '补充说明（如审核动作/驳回意见/变更前后）',
+  ip          VARCHAR(64)  NULL COMMENT '操作来源 IP',
+  create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_user (user_id),
+  KEY idx_action (action),
+  KEY idx_create_time (create_time)
 ) ENGINE = InnoDB;

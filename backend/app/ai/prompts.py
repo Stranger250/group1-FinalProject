@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 
 # 输出 JSON 中要求的大写枚举，与 DATABASE.md §6.1 / schema.question 保持一致
-_TYPES = "SINGLE | MULTIPLE | JUDGE | FILL"
+_TYPES = "SINGLE | MULTIPLE | JUDGE | FILL | SUBJECTIVE"
 _DIFFICULTY = "EASY | MEDIUM | HARD"
 _SOURCE_ROLES = "answer | distractor | analysis"
 
@@ -39,10 +39,11 @@ def _json_schema() -> str:
         '{\n'
         '  "questions": [\n'
         '    {\n'
-        '      "type": "SINGLE | MULTIPLE | JUDGE | FILL",\n'
+        '      "type": "SINGLE | MULTIPLE | JUDGE | FILL | SUBJECTIVE",\n'
         '      "content": "题干",\n'
-        '      "options": ["A 选项", "B 选项", "C 选项", "D 选项"]（FILL 填空时为 null）,\n'
-        '      "answer": "A"（多选 "A,C"，判断 "A"/"B"，填空多空用分号;分隔）,\n'
+        '      "options": ["A 选项", "B 选项", "C 选项", "D 选项"]（FILL 填空 / SUBJECTIVE 解答时为 null）,\n'
+        '      "answer": "A"（多选 "A,C"，判断 "A"/"B"，填空多空用分号;分隔，'
+        '解答题填参考答案要点、要点间用分号;分隔）,\n'
         '      "analysis": "答案解析，说明条款依据",\n'
         '      "knowledge_point": "知识点",\n'
         '      "difficulty": "EASY | MEDIUM | HARD",\n'
@@ -157,7 +158,9 @@ def build_generate_prompt(
         f"2. 干扰项从其他条款或其他安全常识构造，要求似是而非、有区分度，"
         f"避免明显错误、搞笑或过于绝对/宽泛的选项。\n"
         f"3. 判断题固定选项 [\"A 正确\",\"B 错误\"]；填空题 options 置 null，"
-        f"多空答案用分号（;）分隔；单选答案为大写选项标签（如 A）；"
+        f"多空答案用分号（;）分隔；解答题（SUBJECTIVE）options 置 null，"
+        f"答案填参考答案要点、要点间用分号（;）分隔（判分按要点包含命中计分，"
+        f"要点应覆盖条款中的关键要求，每要点一句完整表述）；单选答案为大写选项标签（如 A）；"
         f"多选答案为大写标签用英文逗号连接（如 A,C）。\n"
         f"4. type 必须为大写 {_TYPES} 之一；difficulty 必须为大写 {_DIFFICULTY} 之一。\n"
         f"5. 每题必须给出溯源 sources（数组，每项含 role/law_title/article_no，"
@@ -187,10 +190,11 @@ def _rewrite_json_schema() -> str:
     """重写输出 JSON 结构（单题对象，不含 questions 包裹）。"""
     return (
         '{\n'
-        '  "type": "SINGLE | MULTIPLE | JUDGE | FILL",\n'
+        '  "type": "SINGLE | MULTIPLE | JUDGE | FILL | SUBJECTIVE",\n'
         '  "content": "修订后题干",\n'
-        '  "options": ["A 选项", "B 选项", "C 选项", "D 选项"]（FILL 填空时为 null）,\n'
-        '  "answer": "A"（多选 "A,C"，判断 "A"/"B"，填空多空用分号;分隔）,\n'
+        '  "options": ["A 选项", "B 选项", "C 选项", "D 选项"]（FILL 填空 / SUBJECTIVE 解答时为 null）,\n'
+        '  "answer": "A"（多选 "A,C"，判断 "A"/"B"，填空多空用分号;分隔，'
+        '解答题填参考答案要点、要点间用分号;分隔）,\n'
         '  "analysis": "答案解析，说明条款依据",\n'
         '  "knowledge_point": "知识点（保持与原题一致）",\n'
         '  "difficulty": "EASY | MEDIUM | HARD",\n'
@@ -238,7 +242,8 @@ def build_rewrite_prompt(
         f"2. 题型 type 必须保持「{qtype}」不变；知识点保持「{kp}」不变；"
         f"难度 difficulty 除非修订要求明确要求调整，否则保持原难度。\n"
         f"3. 题干、选项、答案、解析必须齐全；判断题固定选项 [\"A 正确\",\"B 错误\"]；"
-        f"填空题 options 置 null，多空答案用分号（;）分隔；单选答案为选项标签（如 A），"
+        f"填空题 options 置 null，多空答案用分号（;）分隔；解答题（SUBJECTIVE）options 置 null，"
+        f"答案填参考答案要点、要点间用分号（;）分隔；单选答案为选项标签（如 A），"
         f"多选为逗号连接的大写标签（如 A,C）。\n"
         f"4. 必须实质修改（仅措辞润色不算修订），确保修订版解决了驳回问题。\n"
         f"5. 每项溯源 sources（role 取 answer|distractor|analysis）必须在给定条款范围内，"
@@ -284,6 +289,14 @@ def build_qa_prompt(
     history_text = _format_history(history)
     limit = conservative_tokens if mode == "conservative" else max_tokens
 
+    # 保守模式（0.30–0.45 置信度）行为约束：只答单点结论 + 建议查阅原文（RAG 方案 §3.5.2）
+    mode_rule = (
+        "6. 当前检索依据有限（保守模式）：只给出最有把握的单点结论，不展开细节，"
+        "并提示用户可查阅原文/换更具体的问题追问。\n"
+        if mode == "conservative"
+        else ""
+    )
+
     system = (
         "你是「蜀道安全助手」，一名精通安全生产、消防、职业健康等法律法规的 AI 助手。"
         "你只能依据下方【参考资料】中的条文原文回答用户关于安全生产法规的问题。"
@@ -295,7 +308,8 @@ def build_qa_prompt(
         "引用哪条资料就标哪个号，不得标注未使用的资料，也不得编造不存在的序号。\n"
         "4. 若用户问的是与安全生产无关的寒暄，可简短礼貌回应；"
         "若是模糊或非法的问题，先说明无法回答。\n"
-        "5. 用简体中文回答，结构清晰、条理分明，直接给出结论再解释依据。"
+        "5. 用简体中文回答，结构清晰、条理分明，直接给出结论再解释依据。\n"
+        f"{mode_rule}"
     )
 
     user = f"【参考资料】\n{refs}\n\n{history_text}【问题】\n{query}\n\n请依据【参考资料】回答上述问题，引用出处时标注 [n]。"

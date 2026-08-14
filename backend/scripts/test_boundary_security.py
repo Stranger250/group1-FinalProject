@@ -24,7 +24,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import httpx
 
-BASE = "http://127.0.0.1:8000/api/v1"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000/api/v1")
 PASS = 0
 FAIL = 0
 FAILURES: list[str] = []
@@ -141,9 +141,10 @@ def main() -> None:
     r = admin.req("POST", "/questions", json=bad_q)
     ok("content 空 → 422", r.status_code == 422)
     bad_q["content"] = "题目"
-    bad_q["answer"] = "A" * 65
+    # answer 上限已随解答题放宽至 2000（原 64 上限失效）：65 字符合法，2001 字符越界
+    bad_q["answer"] = "A" * 2001
     r = admin.req("POST", "/questions", json=bad_q)
-    ok("answer 65 字符 → 422", r.status_code == 422)
+    ok("answer 2001 字符 → 422", r.status_code == 422)
     bad_q["answer"] = "A"
     bad_q["analysis"] = ""
     r = admin.req("POST", "/questions", json=bad_q)

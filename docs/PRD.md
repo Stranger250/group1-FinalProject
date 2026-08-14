@@ -33,7 +33,16 @@
 | 模块三 考试工坊 | E01 题库管理、E02 AI 出题、E03 试卷生成、E04 在线考试、E05 自动阅卷 |
 | 基础支撑 | B01 用户登录（JWT 鉴权）、B02 角色权限控制、B03 文件上传校验 |
 
-> 本期范围：模块一 H01–H03、模块二 A01–A03、模块三 E01–E05；任务书中 P1/P2 级功能（A04 快捷提问、H04–H08 派单/整改/验收/统计分析/消息通知、E06–E08 考试记录/统计分析/题目审核）本期不实现，后续版本扩展。
+> 本期范围：模块一 H01–H03、模块二 A01–A03、模块三 E01–E05；任务书中 P1/P2 级功能（H04–H08 派单/整改/验收/统计分析/消息通知）本期不实现。
+>
+> **实现现状补充（2026-08-14 核对）**：下列被旧版标注"本期不实现"的功能**已随实现落地**（代码为真源，本行修订以对齐现状，功能不减不降）：
+> - A04 快捷提问：`GET /api/v1/ai/quick-questions` + 前端快捷提问 UI（backend/data/quick_questions.json）
+> - E06 考试记录：`GET /api/v1/exams/records` + 前端「我的记录」页
+> - E07 出题统计：`GET /api/v1/ai/stats` + 前端「出题统计」页
+> - E08 题目审核：`POST /ai/questions/{qid}/review`、`/ai/batches/{batch_id}/review` + 「批次审核」页（E02 审核流）
+> - 模块二另有 A07 回答反馈（`POST /ai/feedback/{message_id}`）与「查看原文」（`GET /ai/article`）
+> - 模块一另有 H01 AI 视觉识别（`POST /api/v1/hazards/analyze`，未配置时 503 降级不阻断上报）
+> - 模块三题库支持第 5 种题型 **SUBJECTIVE 解答题**（手动录入 + AI 出题 + 要点包含自动判分）
 
 ### 1.4 用户角色
 
@@ -46,13 +55,15 @@
 
 ## 2. 技术栈
 
-| 层级 | 技术选型 |
+> 本节为**实现真源**（2026-08-14 按代码现状修订；历史版本见 git 记录）。实现依据：`backend/requirements.txt`、`frontend/package.json`、`backend/app/**`。
+
+| 层级 | 技术选型（实现现状） |
 | --- | --- |
-| 前端 | Vue3、Vite、JavaScript、Element Plus、Vue Router 4、Pinia、Axios |
-| 后端 | Python、FastAPI、SQLAlchemy、Pydantic、PyJWT、requests、asyncio、python-multipart |
-| 数据库 | MySQL（业务数据）、ChromaDB（向量知识库） |
-| AI 集成 | LangChain、公有大模型 API、云端 Embedding 接口 |
-| 部署 | Docker、docker-compose |
+| 前端 | Vue3、Vite、**TypeScript**、Element Plus、Vue Router **5（^5.2.0）**、Pinia、Axios、marked + DOMPurify |
+| 后端 | Python、FastAPI、SQLAlchemy、Pydantic、**python-jose（JWT）**、**httpx（openai SDK）**、asyncio、python-multipart、bcrypt |
+| 数据库 | MySQL（业务数据）、**ChromaDB（本地向量库）**、Redis（**仅配置预留，未启用**，见 ARCHITECTURE §7） |
+| AI 集成 | **OpenAI 兼容协议公有大模型 API（DeepSeek/Qwen 可配置）**、本地 **BGE** 系列 Embedding 与 Reranker、**LangChain 仅用于 Embedding 包装**（RAG 链为自研实现，见 RAG优化方案.md） |
+| 部署 | uvicorn（后端）、Vite build（前端静态产物）；Docker/docker-compose **未落地（规划项）** |
 
 ---
 

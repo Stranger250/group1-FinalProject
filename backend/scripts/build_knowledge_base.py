@@ -87,6 +87,9 @@ def main() -> None:
     ok("条 = 2087", stats.articles == EXPECTED["articles"], str(stats.articles))
     ok("全文 = 303734 字", stats.full_chars == EXPECTED["chars"], str(stats.full_chars))
     ok(f"引用解析率 ≥90%（{EXPECTED_REFS} 处）", stats.ref_rate >= 0.90, f"{stats.ref_rate:.1%}")
+    # 修复（核对发现）：引用总数 172 此前只出现在提示文案、未被真正断言（found=0 时 rate=1.0 会误判 PASS）
+    ok(f"引用总数 = {EXPECTED_REFS}", stats.ref_found == EXPECTED_REFS,
+       f"found={stats.ref_found} resolved={stats.ref_resolved}")
 
     if not args.no_chroma:
         import subprocess

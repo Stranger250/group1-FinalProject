@@ -40,6 +40,7 @@ from ..rag.citations import RetrievedBlock, build_citations, display_score
 from ..rag.rag_config import RAGParams
 from ..rag.retriever import ACCESS_EMPLOYEE, get_retriever
 from ..rag.rewriter import rewrite_query
+from ..rag.sensitive import contains_sensitive
 from ..repository.chat_repo import ConversationRepo, MessageRepo, MessageSourceRepo
 from ..schema.chat import ChatIn
 
@@ -174,11 +175,27 @@ class QaService:
             )
 
             parts: list[str] = []
+            ping_sec = settings.rag_stream_ping_sec
             try:
                 async with _LLM_SEMAPHORE:
-                    async for delta in chat_stream(
+                    stream = chat_stream(
                         system, user_prompt, temperature=0.1, max_tokens=max_tokens
-                    ):
+                    )
+                    while True:
+                        try:
+                            # 单块等待加超时：LLM 静默超过 ping 阈值时先发 ping 保活（RAG 契约 §0.2/§3.7）
+                            delta = await asyncio.wait_for(anext(stream), timeout=ping_sec)
+                        except asyncio.TimeoutError:
+                            yield _sse("ping", {"type": "ping"})
+                            continue
+                        except StopAsyncIteration:
+                            break
+                        # 输出流式敏感词复检（RAG 方案 §3.8）：命中片替换为屏蔽标记并终止
+                        hits = contains_sensitive(delta)
+                        if hits:
+                            yield _sse("delta", {"text": "［内容已屏蔽］"})
+                            logger.warning("输出敏感词拦截：%s", "、".join(hits))
+                            break
                         yield _sse("delta", {"text": delta})
                         parts.append(delta)
             except (GeneratorExit, asyncio.CancelledError):

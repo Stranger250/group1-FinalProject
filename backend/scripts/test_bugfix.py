@@ -1,4 +1,4 @@
-"""19 个 bug 修复的回归套件（对应 Workflow 审查 confirmed findings #1-#19）。
+﻿"""19 个 bug 修复的回归套件（对应 Workflow 审查 confirmed findings #1-#19）。
 
 分两部分：
   U 纯单测（无需服务器/DB）：全角归一化（#11）、JWT 占位密钥旋转（#9）；
@@ -31,7 +31,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-BASE = "http://127.0.0.1:8000/api/v1"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000/api/v1")
 FAILURES: list[str] = []
 TAG = f"BUGFIX-{uuid.uuid4().hex[:6]}"
 # 本套件产生的数据（结尾 SQL 清理）

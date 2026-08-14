@@ -200,15 +200,33 @@ def _migrate_exam_record(cur, db: str) -> bool:
     ans_idxs = {row[0] for row in cur.fetchall()}
 
     if "user_answer" in ans_cols:
-        cur.execute("ALTER TABLE exam_answer MODIFY COLUMN user_answer VARCHAR(255) NOT NULL")
+        cur.execute("ALTER TABLE exam_answer MODIFY COLUMN user_answer TEXT NOT NULL")
         migrated = True
     if "correct_answer" in ans_cols:
-        cur.execute("ALTER TABLE exam_answer MODIFY COLUMN correct_answer VARCHAR(255) NOT NULL")
+        cur.execute("ALTER TABLE exam_answer MODIFY COLUMN correct_answer TEXT NOT NULL")
         migrated = True
     if "uk_record_question" not in ans_idxs:
         cur.execute(
             "ALTER TABLE exam_answer ADD UNIQUE KEY uk_record_question (record_id, question_id)"
         )
+        migrated = True
+    return migrated
+
+
+def _migrate_subjective_answer(cur, db: str) -> bool:
+    """解答题迁移（幂等）：question.answer / exam_answer 两列扩为 TEXT（解答题参考答案与作答可达数百字）。
+
+    旧库 VARCHAR(64)/VARCHAR(255) 存不下解答题长文本，扩为 TEXT 后手动录入与 AI 出题均可入库。
+    """
+    migrated = False
+    cur.execute(
+        "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='question'",
+        (db,),
+    )
+    q_cols = {row[0]: row[1] for row in cur.fetchall()}
+    if "answer" in q_cols and q_cols["answer"].upper() != "TEXT":
+        cur.execute("ALTER TABLE question MODIFY COLUMN answer TEXT NOT NULL")
         migrated = True
     return migrated
 
@@ -346,6 +364,11 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_exam_record(cur, db):
                 print("[OK] exam_record/exam_answer 表迁移：E04/E05 字段补齐")
+
+        # 2.71) 解答题迁移（幂等）：question.answer / exam_answer 两列扩为 TEXT
+        with conn.cursor() as cur:
+            if _migrate_subjective_answer(cur, db):
+                print("[OK] question/exam_answer 表迁移：answer 列扩为 TEXT（解答题支持）")
 
         # 2.8) 模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 反馈）
         with conn.cursor() as cur:

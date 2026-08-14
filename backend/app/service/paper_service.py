@@ -261,6 +261,11 @@ class PaperService:
             setattr(paper, k, v)
         db.commit()
         db.refresh(paper)
+        # 审计留痕（独立事务，失败不阻断）：发布/状态变更关键操作
+        if "status" in fields:
+            from ..utils.audit import write_audit
+            write_audit(db, paper, "paper_status", target_type="paper", target_id=pid,
+                        detail=f"status={fields['status']}")
         return PaperService._detail(db, paper)
 
     @staticmethod

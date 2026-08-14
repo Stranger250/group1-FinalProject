@@ -15,6 +15,7 @@ class QuestionType:
     MULTIPLE = "MULTIPLE"  # 多选
     JUDGE = "JUDGE"        # 判断
     FILL = "FILL"          # 填空
+    SUBJECTIVE = "SUBJECTIVE"  # 解答题（要点包含判分，参考答案分号分隔要点）
 
 
 class QuestionDifficulty:
@@ -43,7 +44,8 @@ class Question(Base):
     type: Mapped[str] = mapped_column(String(16), index=True)
     content: Mapped[str] = mapped_column(Text)
     options: Mapped[list | None] = mapped_column(JSON)
-    answer: Mapped[str] = mapped_column(String(64))
+    # 解答题参考答案可达数百字，从 VARCHAR(64) 扩为 TEXT（schema.sql 与 init_db 迁移同步）
+    answer: Mapped[str] = mapped_column(Text)
     analysis: Mapped[str | None] = mapped_column(Text)
     knowledge_point: Mapped[str] = mapped_column(String(128), index=True)
     difficulty: Mapped[str] = mapped_column(String(16), index=True)

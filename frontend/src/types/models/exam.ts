@@ -1,6 +1,6 @@
 /** 模块三 考试工坊模型（对齐 /api/v1/questions、/ai/*、/papers/*、/exams/* 契约）。 */
 
-export type QuestionType = 'SINGLE' | 'MULTIPLE' | 'JUDGE' | 'FILL'
+export type QuestionType = 'SINGLE' | 'MULTIPLE' | 'JUDGE' | 'FILL' | 'SUBJECTIVE'
 export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD'
 export type QuestionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'DISABLED'
 export type QuestionSource = 'manual' | 'ai'

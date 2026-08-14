@@ -153,6 +153,10 @@ class HazardService:
         )
         db.commit()
         db.refresh(h)
+        # 审计留痕（独立事务，失败不阻断）
+        from ..utils.audit import write_audit
+        write_audit(db, user, "hazard_close", target_type="hazard", target_id=hid,
+                    detail=f"hazard_no={h.hazard_no}")
         return {"message": "已闭环", "hazard_no": h.hazard_no, "status": h.status}
 
     # ---------- 组装 ----------

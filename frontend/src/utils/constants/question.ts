@@ -6,6 +6,7 @@ export const QUESTION_TYPES: { value: QuestionType; label: string; answerHint: s
   { value: 'MULTIPLE', label: '多选题', answerHint: '多选，多个字母（如 ABD）' },
   { value: 'JUDGE', label: '判断题', answerHint: 'A=正确 / B=错误' },
   { value: 'FILL', label: '填空题', answerHint: '填写答案文本' },
+  { value: 'SUBJECTIVE', label: '解答题', answerHint: '填写参考答案，要点用分号（;）分隔' },
 ]
 
 /** 难度枚举（唯一真源） */

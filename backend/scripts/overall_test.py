@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from datetime import datetime
@@ -16,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import httpx
 
-BASE = "http://127.0.0.1:8000"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000")
 PASS = 0
 FAIL = 0
 FAILURES: list[str] = []

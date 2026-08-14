@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import re
 import uuid
 
 from fastapi import HTTPException, status
@@ -164,11 +165,11 @@ def _finalize_rewrite(
     if difficulty not in _DIFFICULTY_ALLOWED:
         difficulty = original.difficulty
     answer_raw = str(data.get("answer") or "").strip()
-    answer = answer_raw if type_ == QuestionType.FILL else answer_raw.upper()
+    answer = answer_raw if type_ in (QuestionType.FILL, QuestionType.SUBJECTIVE) else answer_raw.upper()
     options = data.get("options")
     if type_ == QuestionType.JUDGE:
         options = ["A 正确", "B 错误"]
-    elif type_ == QuestionType.FILL:
+    elif type_ in (QuestionType.FILL, QuestionType.SUBJECTIVE):
         options = None
     try:
         QuestionService._validate_answers(type_, options, answer)
@@ -287,30 +288,41 @@ class GenService:
         batch_id = "ai_" + uuid.uuid4().hex[:12]
         law_titles = set(corpus.law_titles)
         prepared: list[dict] = []
+        # 批次内题干去重（AI_SOLUTION §6.1「去重与完整性检查」落地）：
+        # 规范化题干（去空白/标点）做集合判重，防止同批重复题
+        seen_contents: set[str] = set()
         for i, q in enumerate(questions):
             data = q.model_dump() if hasattr(q, "model_dump") else dict(q)
             type_ = str(data.get("type") or "").strip().upper()
             difficulty = str(data.get("difficulty") or "").strip().upper()
             knowledge_point = (str(data.get("knowledge_point") or topic)).strip()
             content = str(data.get("content") or "").strip()
-            # FILL 答案为自由文本（可含小写/数字），不做大写归一；其余题型答案收敛大写
+
+            # 批次内去重：规范化题干（去空白）重复则跳过该题（不影响批次数量的宽松验收）
+            content_key = re.sub(r"\s+", "", content)
+            if content_key in seen_contents:
+                logger.warning("批次内重复题干跳过：%s", content[:40])
+                continue
+            seen_contents.add(content_key)
+            # FILL/SUBJECTIVE 答案为自由文本（可含小写/数字），不做大写归一；其余题型答案收敛大写
             answer_raw = str(data.get("answer") or "").strip()
-            answer = answer_raw if type_ == QuestionType.FILL else answer_raw.upper()
+            answer = answer_raw if type_ in (QuestionType.FILL, QuestionType.SUBJECTIVE) else answer_raw.upper()
             options = data.get("options")
             analysis = (data.get("analysis") or "").strip() or None
 
             # 题型/难度合法性 + 题干非空
-            if type_ not in (QuestionType.SINGLE, QuestionType.MULTIPLE, QuestionType.JUDGE, QuestionType.FILL):
+            if type_ not in (QuestionType.SINGLE, QuestionType.MULTIPLE, QuestionType.JUDGE,
+                             QuestionType.FILL, QuestionType.SUBJECTIVE):
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"第{i + 1}题题型不合法：{type_}")
             if difficulty not in _DIFFICULTY_ALLOWED:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"第{i + 1}题难度不合法：{difficulty}")
             if not content:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"第{i + 1}题题干为空")
 
-            # JUDGE 强制固定选项；FILL 置空 options；再走答案/选项格式校验
+            # JUDGE 强制固定选项；FILL/SUBJECTIVE 置空 options；再走答案/选项格式校验
             if type_ == QuestionType.JUDGE:
                 options = ["A 正确", "B 错误"]
-            elif type_ == QuestionType.FILL:
+            elif type_ in (QuestionType.FILL, QuestionType.SUBJECTIVE):
                 options = None
             try:
                 QuestionService._validate_answers(type_, options, answer)

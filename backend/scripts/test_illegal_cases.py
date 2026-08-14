@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from datetime import datetime
@@ -30,7 +31,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import httpx
 
-BASE = "http://127.0.0.1:8000/api/v1"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000/api/v1")
 PASS = 0
 FAIL = 0
 FAILURES: list[str] = []
@@ -326,8 +327,8 @@ def main() -> None:
     # ===== L 答题/题目字段 =====
     section("L · 答题/题目字段")
     r = emp.req("POST", f"/exams/{rec_id}/save",
-                json={"answers": [{"question_id": q1, "user_answer": "A" * 256}]})
-    ok("user_answer 256 字符 → 422", r.status_code == 422, f"got {r.status_code}")
+                json={"answers": [{"question_id": q1, "user_answer": "A" * 2001}]})
+    ok("user_answer 2001 字符 → 422（上限已随解答题放宽至 2000）", r.status_code == 422, f"got {r.status_code}")
     r = admin.req("POST", "/questions", json={
         "type": "SINGLE", "content": "溯源长度", "options": ["A. 是", "B. 否"],
         "answer": "A", "analysis": "解析", "knowledge_point": "kp", "difficulty": "EASY",

@@ -58,6 +58,10 @@ class ReviewService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="题目不存在")
         data = ReviewService._precheck(db, q, payload, reviewer_id)
         q = QuestionRepo.update(db, q, **data)
+        # 审计留痕（独立事务，失败不阻断）
+        from ..utils.audit import write_audit
+        write_audit(db, q, "question_review", target_type="question", target_id=qid,
+                    detail=f"action={payload.action} note={payload.review_note or ''} reviewer={reviewer_id}")
         return _to_dict(q)
 
     @staticmethod

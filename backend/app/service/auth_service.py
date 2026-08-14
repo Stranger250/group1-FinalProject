@@ -34,10 +34,19 @@ class AuthService:
     def login(db: Session, *, username: str, password: str) -> dict:
         user = UserRepo.get_by_username(db, username)
         if user is None or not verify_password(password, user.password):
+            # 登录失败留痕（用户名可能不存在，user 为 None 时仍记录动作）
+            from ..utils.audit import write_audit
+            write_audit(db, user, "login_failed", target_type="user",
+                        target_id=getattr(user, "id", None), detail=f"username={username}", ip="")
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
         if user.status != 1:
+            from ..utils.audit import write_audit
+            write_audit(db, user, "login_disabled", target_type="user",
+                        target_id=user.id, detail="账号已禁用", ip="")
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="账号已禁用")
         token = create_access_token(user.id)
+        from ..utils.audit import write_audit
+        write_audit(db, user, "login", target_type="user", target_id=user.id, ip="")
         return {"access_token": token, "token_type": "bearer", "user": _user_payload(user)}
 
     @staticmethod

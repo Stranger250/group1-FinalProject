@@ -46,6 +46,11 @@ class QuestionService:
             blanks = [p.strip() for p in answer.replace("；", ";").split(";")]
             if any(not b for b in blanks):
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="填空题多空答案用分号分隔，每空不能为空")
+        elif type_ == QuestionType.SUBJECTIVE:
+            # 解答题：无选项；参考答案非空，分号分隔要点，每要点不能为空
+            points = [p.strip() for p in answer.replace("；", ";").split(";")]
+            if any(not p for p in points):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="解答题参考答案用分号分隔要点，每个要点不能为空")
 
     @staticmethod
     def create(db: Session, payload: QuestionCreate, operator_id: int) -> dict:

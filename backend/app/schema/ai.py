@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..core.config import get_settings
 
-AiQuestionType = Literal["SINGLE", "MULTIPLE", "JUDGE", "FILL"]
+AiQuestionType = Literal["SINGLE", "MULTIPLE", "JUDGE", "FILL", "SUBJECTIVE"]
 AiQuestionDifficulty = Literal["EASY", "MEDIUM", "HARD"]
 AiReviewAction = Literal["APPROVE", "REJECT"]
 

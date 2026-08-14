@@ -37,6 +37,9 @@ class AdminUserService:
             raise HTTPException(http_status.HTTP_400_BAD_REQUEST, detail="系统至少需保留一个启用的管理员")
         # 被禁用账号的 JWT 会被 get_current_user 的 status 复核拦截，立即失效（security.py #15）
         UserRepo.update_fields(db, target, role_id=role_id, status=status)
+        from ..utils.audit import write_audit
+        write_audit(db, operator, "user_update", target_type="user", target_id=user_id,
+                    detail=f"role_id={role_id} status={status}")
         return _item(target)
 
     @staticmethod
@@ -47,6 +50,9 @@ class AdminUserService:
             raise HTTPException(http_status.HTTP_404_NOT_FOUND, detail="用户不存在")
         new_password = secrets.token_urlsafe(10)
         UserRepo.set_password(db, target, hash_password(new_password))
+        from ..utils.audit import write_audit
+        write_audit(db, target, "password_reset", target_type="user", target_id=user_id,
+                    detail="管理员重置密码（临时密码一次性返回）")
         return {"username": target.username, "new_password": new_password}
 
 

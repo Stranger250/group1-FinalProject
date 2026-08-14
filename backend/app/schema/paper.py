@@ -44,7 +44,7 @@ class PaperManualCreate(BaseModel):
 class PaperAutoRule(BaseModel):
     """AI 智能组卷规则：按「题型 × 难度」抽题数量；difficulty 缺省=全部难度。"""
 
-    type: Literal["SINGLE", "MULTIPLE", "JUDGE", "FILL"]
+    type: Literal["SINGLE", "MULTIPLE", "JUDGE", "FILL", "SUBJECTIVE"]
     difficulty: Literal["EASY", "MEDIUM", "HARD"] | None = None
     count: int = Field(ge=1, le=100)
 

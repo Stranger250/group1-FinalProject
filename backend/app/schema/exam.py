@@ -16,7 +16,7 @@ class ExamStartIn(BaseModel):
 
 class AnswerItem(BaseModel):
     question_id: int = Field(ge=1)
-    user_answer: str = Field(default="", max_length=255)  # 放宽至 255 适配填空多空中文答案
+    user_answer: str = Field(default="", max_length=2000)  # 解答题作答可达数百字，放宽至 2000
 
 
 class ExamAnswersIn(BaseModel):

@@ -16,8 +16,9 @@
     {
       "title": "生产安全事故报告和调查处理条例",
       "keyword": "生产安全事故报告和调查处理条例",
-      "source": "flk",
-      "category": "行政法规"
+      "source": "moj",
+      "category": "行政法规",
+      "comment": "实际数据源为司法部 xzfg.moj.gov.cn（LawID=195），原 flk 通道无法复现（文档一致性核对修正）"
     },
     {
       "title": "安全生产违法行为行政处罚办法",
