@@ -53,7 +53,7 @@ export interface UiChatMessage {
 }
 
 /** 归一化 SSE meta/done citations（unknown[] → ChatCitation[]，脏数据丢弃） */
-function normalizeLiveCitation(raw: unknown): ChatCitation | null {
+export function normalizeLiveCitation(raw: unknown): ChatCitation | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   const docId = typeof o.doc_id === 'string' && o.doc_id ? o.doc_id : undefined
@@ -76,7 +76,7 @@ function normalizeLiveCitation(raw: unknown): ChatCitation | null {
 }
 
 /** 归一化历史 sources（MessageSource → ChatCitation；doc_id+article_no 齐备才可点击查看原文） */
-function normalizeStoredSource(s: MessageSource): ChatCitation {
+export function normalizeStoredSource(s: MessageSource): ChatCitation {
   const docId = s.doc_id || undefined
   const articleNo = s.article_no || undefined
   return {
@@ -91,7 +91,7 @@ function normalizeStoredSource(s: MessageSource): ChatCitation {
 }
 
 /** 后端历史消息 → UI 消息（SUCCESS 视为完成，其余视为失败态） */
-function toUiMessage(m: ChatMessage): UiChatMessage {
+export function toUiMessage(m: ChatMessage): UiChatMessage {
   const isAssistant = m.role === 'assistant'
   const ok = m.status === 'SUCCESS'
   return {
@@ -106,7 +106,7 @@ function toUiMessage(m: ChatMessage): UiChatMessage {
   }
 }
 
-function filterCitations(list: unknown[] | null | undefined): ChatCitation[] {
+export function filterCitations(list: unknown[] | null | undefined): ChatCitation[] {
   if (!Array.isArray(list)) return []
   const out: ChatCitation[] = []
   for (const raw of list) {
