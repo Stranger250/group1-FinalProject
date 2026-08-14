@@ -188,7 +188,7 @@ def main() -> None:
     d = r.json()["data"]
     q2m = {q["question_id"]: q for q in d["questions"]}[Q2]
     ok("漏选 MULTIPLE 0 分", q2m["is_correct"] == 0 and q2m["score"] == 0, f"q2 score={q2m['score']}")
-    ok("总分 80 仍 PASS(≥60)", d["total_score"] == 80 and d["status"] == "PASS", f"score={d['total_score']} status={d['status']}")
+    ok("总分 80 仍 PASS(≥60)", d["score"] == 80 and d["status"] == "PASS", f"score={d['score']} status={d['status']}")
 
     print("\n== T8 A3 切屏第 4 次触发自动交卷 ==")
     r = c.post("/exams/start", json={"paper_id": P2}, headers=e2)
@@ -212,14 +212,14 @@ def main() -> None:
     d = r.json()["data"]
     ok("超时 resume 自动交卷", d["state"] == "SUBMITTED", f"state={d['state']}")
     ok("reason=timeout", d["reason"] == "timeout", f"reason={d['reason']}")
-    ok("超时未作答 0 分 FAIL", d["total_score"] == 0 and d["passed"] is False, f"score={d['total_score']}")
+    ok("超时未作答 0 分 FAIL", d["score"] == 0 and d["passed"] is False, f"score={d['score']}")
 
     print("\n== T10 A12 空卷交卷 ==")
     r = c.post("/exams/start", json={"paper_id": P4}, headers=e3)
     rid5 = r.json()["data"]["record_id"]
     r = c.post(f"/exams/{rid5}/submit", json={"answers": []}, headers=e3)
     d = r.json()["data"]
-    ok("空卷 0 分 FAIL", d["total_score"] == 0 and d["status"] == "FAIL")
+    ok("空卷 0 分 FAIL", d["score"] == 0 and d["status"] == "FAIL", f"score={d['score']}")
     ok("每题占位行 user_answer=''", all(q["user_answer"] == "" and q["is_correct"] == 0 for q in d["questions"]))
 
     print("\n== T11 A10 并发双交（只评一次，分数一致）==")

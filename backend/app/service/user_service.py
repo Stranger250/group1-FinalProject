@@ -44,7 +44,7 @@ class AdminUserService:
         """重置密码：生成一次性临时密码（返回给管理员展示，仅此一次）。"""
         target = UserRepo.get_by_id(db, user_id)
         if target is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="用户不存在")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, detail="用户不存在")
         new_password = secrets.token_urlsafe(10)
         UserRepo.set_password(db, target, hash_password(new_password))
         return {"username": target.username, "new_password": new_password}
