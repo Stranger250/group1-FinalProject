@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
@@ -19,6 +19,30 @@ from ..service.exam_service import ExamService
 from ..utils.response import resp
 
 router = APIRouter(prefix="/api/v1/exams", tags=["考试工坊 E04/E05 在线考试"])
+
+
+# 静态前缀路由必须注册在 /{record_id} 之前：FastAPI 按注册顺序匹配，
+# /exams/papers、/exams/records 若命中 int 型 {record_id} 会 422 而非落到下方静态路由。
+
+
+@router.get("/papers", summary="公开选卷列表（仅已发布，脱敏无题目，前端 /exams 选卷页）")
+def list_published_papers(
+    page: int = Query(default=1, ge=1, le=100000),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return resp(ExamService.list_published_papers(db, user, page=page, page_size=page_size))
+
+
+@router.get("/records", summary="我的考试记录（分页，前端 /exams/records 页）")
+def list_my_records(
+    page: int = Query(default=1, ge=1, le=100000),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return resp(ExamService.list_my_records(db, user, page=page, page_size=page_size))
 
 
 @router.post("/start", summary="开始考试（或刷新复用进行中的考试）")

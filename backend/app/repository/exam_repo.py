@@ -7,11 +7,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
 from ..model.exam import ExamAnswer, ExamRecord, ExamRecordState
+from ..model.paper import ExamPaper, PaperStatus
 
 
 class ExamRepo:
@@ -100,3 +101,53 @@ class ExamRepo:
         db.execute(
             update(ExamRecord).where(ExamRecord.id == record_id).values(cheat_count=count)
         )
+
+    # ---------- 公开选卷 / 考试记录（前端配套接口） ----------
+
+    @staticmethod
+    def list_published(
+        db: Session, page: int = 1, page_size: int = 20
+    ) -> tuple[list[ExamPaper], int]:
+        """公开选卷：仅已发布（PUBLISHED）试卷，按发布时间倒序（前端 /exams 选卷页）。"""
+        total = db.scalar(
+            select(func.count(ExamPaper.id)).where(ExamPaper.status == PaperStatus.PUBLISHED)
+        ) or 0
+        items = list(
+            db.scalars(
+                select(ExamPaper)
+                .where(ExamPaper.status == PaperStatus.PUBLISHED)
+                .order_by(ExamPaper.id.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+        return items, total
+
+    @staticmethod
+    def get_ongoing_map(db: Session, user_id: int) -> dict[int, int]:
+        """当前用户所有进行中记录 → {paper_id: record_id}（选卷页「继续考试」标识）。"""
+        rows = db.execute(
+            select(ExamRecord.paper_id, ExamRecord.id).where(
+                ExamRecord.user_id == user_id, ExamRecord.state == ExamRecordState.ONGOING
+            )
+        ).all()
+        return {pid: rid for pid, rid in rows}
+
+    @staticmethod
+    def list_records_by_user(
+        db: Session, user_id: int, page: int = 1, page_size: int = 20
+    ) -> tuple[list[ExamRecord], int]:
+        """我的考试记录（全部状态，按开始时间倒序），供前端 /exams/records 分页列表。"""
+        total = (
+            db.scalar(select(func.count(ExamRecord.id)).where(ExamRecord.user_id == user_id)) or 0
+        )
+        items = list(
+            db.scalars(
+                select(ExamRecord)
+                .where(ExamRecord.user_id == user_id)
+                .order_by(ExamRecord.id.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+        return items, total

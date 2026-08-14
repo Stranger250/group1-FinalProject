@@ -1,0 +1,338 @@
+<!-- H03 隐患详情（P04）：全字段 + 图片预览 + 处理进度时间线 + risk_report 结构化展示
+     （AI 识别建议/检测明细/标注图）+ 闭环按钮（SAFETY/ADMIN 且 WAIT_PROCESS 双门控）。 -->
+<template>
+  <div class="hazard-detail">
+    <div v-if="loading" v-loading="true" class="detail-loading" />
+
+    <template v-else-if="detail">
+      <div class="page-head">
+        <div>
+          <h2 class="page-title">{{ detail.title }}</h2>
+          <el-text type="info" size="small">
+            编号 {{ detail.hazard_no }} · 上报人 {{ detail.creator_name }} · {{ formatDateTime(detail.create_time) }}
+          </el-text>
+        </div>
+        <div class="head-actions">
+          <el-button :icon="'Back'" @click="router.back()">返回列表</el-button>
+          <el-button
+            v-if="canClose"
+            type="danger"
+            :icon="'CircleCheck'"
+            :loading="closing"
+            @click="onClose"
+          >
+            闭环
+          </el-button>
+        </div>
+      </div>
+
+      <el-row :gutter="16">
+        <!-- 基本信息 + 现场图片 -->
+        <el-col :xs="24" :md="14">
+          <el-card shadow="never" class="block-card">
+            <template #header>
+              <span class="block-title">基本信息</span>
+            </template>
+            <el-descriptions :column="2" border class="desc-list">
+              <el-descriptions-item label="隐患编号">{{ detail.hazard_no }}</el-descriptions-item>
+              <el-descriptions-item label="状态">
+                <el-tag :type="statusMeta(detail.status).tag">{{ statusMeta(detail.status).label }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="等级">
+                <el-tag :type="levelMeta(detail.level).tag">{{ levelMeta(detail.level).label }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="类型">{{ detail.type }}</el-descriptions-item>
+              <el-descriptions-item label="位置">{{ detail.location || '未填写' }}</el-descriptions-item>
+              <el-descriptions-item label="上报人">{{ detail.creator_name }}</el-descriptions-item>
+              <el-descriptions-item label="上报时间">{{ formatDateTime(detail.create_time) }}</el-descriptions-item>
+              <el-descriptions-item label="更新时间">{{ formatDateTime(detail.update_time) }}</el-descriptions-item>
+              <el-descriptions-item label="处理期限" :span="2">{{ formatDateTime(detail.deadline) }}</el-descriptions-item>
+              <el-descriptions-item label="整改措施" :span="2">
+                {{ detail.rectification_measure || '未填写' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="驳回原因" :span="2">{{ detail.reject_reason || '无' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <div class="detail-section">
+              <div class="block-title">隐患描述</div>
+              <p class="desc-text">{{ detail.description }}</p>
+            </div>
+
+            <div class="detail-section">
+              <div class="block-title">现场图片（{{ detail.images.length }}）</div>
+              <div v-if="detail.images.length" class="img-list">
+                <el-image
+                  v-for="img in detail.images"
+                  :key="img.id"
+                  class="detail-img"
+                  :src="img.image_url"
+                  fit="cover"
+                  :preview-src-list="imageUrls"
+                  :initial-index="imageIndex(img.id)"
+                  preview-teleported
+                />
+              </div>
+              <el-empty v-else :image-size="60" description="无现场图片" />
+            </div>
+          </el-card>
+        </el-col>
+
+        <!-- 处理进度时间线 -->
+        <el-col :xs="24" :md="10">
+          <el-card shadow="never" class="block-card">
+            <template #header>
+              <span class="block-title">处理进度</span>
+            </template>
+            <el-timeline v-if="detail.timeline.length">
+              <el-timeline-item
+                v-for="log in detail.timeline"
+                :key="log.id"
+                :timestamp="formatDateTime(log.create_time)"
+                :type="timelineType(log.operation)"
+                placement="top"
+              >
+                <div class="log-item">
+                  <div class="log-op">{{ opLabel(log.operation) }}</div>
+                  <div class="log-extra">
+                    <span v-if="log.operator_name">操作人：{{ log.operator_name }}</span>
+                    <span v-if="log.old_status || log.new_status" class="status-flow">
+                      {{ log.old_status ? statusMeta(log.old_status as HazardStatus).label : '—' }}
+                      转为
+                      {{ log.new_status ? statusMeta(log.new_status as HazardStatus).label : '—' }}
+                    </span>
+                  </div>
+                  <div v-if="log.remark" class="log-remark">{{ log.remark }}</div>
+                </div>
+              </el-timeline-item>
+            </el-timeline>
+            <el-empty v-else :image-size="60" description="暂无处理记录" />
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <!-- risk_report 结构化展示（AI 识别建议 + 检测明细 + 标注图） -->
+      <el-card v-if="riskResult" shadow="never" class="block-card risk-card">
+        <template #header>
+          <span class="block-title">识别报告</span>
+        </template>
+        <AiAnalyzePanel :result="riskResult" :actionable="false" />
+      </el-card>
+    </template>
+
+    <el-empty v-else-if="!error" :image-size="80" description="加载中…" />
+    <el-result v-else status="error" title="加载失败" sub-title="隐患不存在或已被删除">
+      <template #extra>
+        <el-button type="primary" @click="router.push('/hazards')">返回列表</el-button>
+      </template>
+    </el-result>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { closeHazard, getHazard } from '@/api/hazard'
+import type { AnalyzeResult, HazardDetail as HazardDetailModel, HazardLevel, HazardStatus } from '@/types/models/hazard'
+import { hazardLevelMeta, hazardStatusMeta } from '@/utils/constants'
+import { formatDateTime } from '@/utils/format'
+import { useUserStore } from '@/store/user'
+import AiAnalyzePanel from '@/components/hazard/AiAnalyzePanel.vue'
+
+const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
+
+const loading = ref(true)
+const closing = ref(false)
+const error = ref(false)
+const detail = ref<HazardDetailModel | null>(null)
+
+/** 操作码 → 中文（后端存中文，兜底映射常见代码） */
+const OP_LABEL: Record<string, string> = {
+  SUBMIT: '提交上报',
+  CLOSE: '闭环确认',
+}
+
+function opLabel(op: string): string {
+  return OP_LABEL[op] ?? op
+}
+
+/** 时间线节点颜色（提交绿 / 闭环红） */
+function timelineType(op: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+  if (op === 'SUBMIT' || op === '提交') return 'success'
+  if (op === 'CLOSE' || op === '闭环') return 'danger'
+  return 'primary'
+}
+
+function levelMeta(v: HazardLevel) {
+  return hazardLevelMeta(v)
+}
+
+function statusMeta(v: HazardStatus) {
+  return hazardStatusMeta(v)
+}
+
+const imageUrls = computed(() => detail.value?.images.map((i) => i.image_url) ?? [])
+
+function imageIndex(id: number): number {
+  return detail.value?.images.findIndex((i) => i.id === id) ?? 0
+}
+
+/** risk_report → AnalyzeResult 兼容结构（仅当含 type_suggest / detections 时展示） */
+const riskResult = computed<AnalyzeResult | null>(() => {
+  const rr = detail.value?.risk_report
+  if (!rr || typeof rr !== 'object') return null
+  const r = rr as unknown as AnalyzeResult
+  if (r.type_suggest || (Array.isArray(r.detections) && r.detections.length)) return r
+  return null
+})
+
+/** 闭环门控：SAFETY(2)/ADMIN(3) 且状态为 WAIT_PROCESS */
+const canClose = computed(
+  () => (userStore.roleId === 2 || userStore.roleId === 3) && detail.value?.status === 'WAIT_PROCESS',
+)
+
+async function load() {
+  loading.value = true
+  error.value = false
+  try {
+    detail.value = await getHazard(Number(route.params.id))
+  } catch {
+    error.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+async function onClose() {
+  const h = detail.value
+  if (!h) return
+  try {
+    await ElMessageBox.confirm(
+      `确认将隐患「${h.title}」直接闭环为「已闭环」吗？闭环后不可恢复。`,
+      '闭环确认',
+      { type: 'warning', confirmButtonText: '确认闭环', cancelButtonText: '取消' },
+    )
+  } catch {
+    return // 用户取消
+  }
+  closing.value = true
+  try {
+    const res = await closeHazard(h.id)
+    ElMessage.success(`${res.message}（${res.hazard_no}）`)
+    await load()
+  } catch {
+    // 错误已由 request 层统一提示
+  } finally {
+    closing.value = false
+  }
+}
+
+onMounted(load)
+</script>
+
+<style scoped>
+.hazard-detail {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.detail-loading {
+  height: 300px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  color: var(--el-text-color-primary, #232b2a);
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.block-card {
+  margin-bottom: 16px;
+}
+
+.block-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary, #232b2a);
+}
+
+.detail-section {
+  margin-top: 16px;
+}
+
+.desc-list {
+  margin-bottom: 0;
+}
+
+.desc-text {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--el-text-color-regular, #4b5553);
+  white-space: pre-wrap;
+}
+
+.img-list {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.detail-img {
+  width: 128px;
+  height: 128px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light, #e5e1d7);
+  cursor: zoom-in;
+}
+
+.log-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-op {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary, #232b2a);
+}
+
+.log-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary, #707a78);
+}
+
+.status-flow {
+  color: var(--el-text-color-regular, #4b5553);
+}
+
+.log-remark {
+  font-size: 13px;
+  color: var(--el-text-color-regular, #4b5553);
+}
+
+.risk-card :deep(.ai-analyze-panel) {
+  background: var(--surface, #f8f7f3);
+}
+</style>

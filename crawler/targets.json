@@ -1,0 +1,186 @@
+{
+  "说明": "目标规章清单。source: flk=国家法律库 / moj=行政法规库 / dept=部门规章 / sichuan=四川库（file_type: 2=政府规章 1=地方性法规）。moj 需填 law_id；dept 可填 department。",
+  "targets": [
+    {
+      "title": "中华人民共和国安全生产法",
+      "keyword": "中华人民共和国安全生产法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "建设工程安全生产管理条例",
+      "keyword": "建设工程安全生产管理条例",
+      "source": "flk",
+      "category": "行政法规"
+    },
+    {
+      "title": "生产安全事故报告和调查处理条例",
+      "keyword": "生产安全事故报告和调查处理条例",
+      "source": "flk",
+      "category": "行政法规"
+    },
+    {
+      "title": "安全生产违法行为行政处罚办法",
+      "keyword": "安全生产违法行为行政处罚办法",
+      "source": "dept",
+      "category": "部门规章",
+      "department": "应急管理部"
+    },
+    {
+      "title": "生产安全事故应急预案管理办法",
+      "keyword": "生产安全事故应急预案管理办法",
+      "source": "dept",
+      "category": "部门规章",
+      "department": "应急管理部"
+    },
+    {
+      "title": "四川省生产经营单位安全生产责任规定",
+      "keyword": "四川省生产经营单位安全生产责任规定",
+      "source": "sichuan",
+      "category": "政府规章",
+      "file_type": 2
+    },
+    {
+      "title": "四川省生产安全事故报告和调查处理规定",
+      "keyword": "四川省生产安全事故报告和调查处理规定",
+      "source": "sichuan",
+      "category": "政府规章",
+      "file_type": 2
+    },
+    {
+      "title": "四川省突发事件应对办法",
+      "keyword": "四川省突发事件应对办法",
+      "source": "sichuan",
+      "category": "政府规章",
+      "file_type": 2
+    },
+    {
+      "title": "四川省道路交通安全责任制规定",
+      "keyword": "四川省道路交通安全责任制规定",
+      "source": "sichuan",
+      "category": "政府规章",
+      "file_type": 2
+    },
+    {
+      "title": "四川省消防条例",
+      "keyword": "四川省消防条例",
+      "source": "sichuan",
+      "category": "地方性法规",
+      "file_type": 1
+    },
+    {
+      "title": "四川省地质灾害防治条例",
+      "keyword": "四川省地质灾害防治条例",
+      "source": "sichuan",
+      "category": "地方性法规",
+      "file_type": 1
+    },
+    {
+      "title": "四川省高速公路条例",
+      "keyword": "四川省高速公路条例",
+      "source": "sichuan",
+      "category": "地方性法规",
+      "file_type": 1
+    },
+    {
+      "title": "四川省道路运输条例",
+      "keyword": "四川省道路运输条例",
+      "source": "sichuan",
+      "category": "地方性法规",
+      "file_type": 1
+    },
+    {
+      "title": "四川省安全生产条例",
+      "keyword": "四川省安全生产条例",
+      "source": "sichuan",
+      "category": "地方性法规",
+      "file_type": 1
+    },
+    {
+      "title": "四川省有限空间作业安全管理规定",
+      "keyword": "四川省有限空间作业安全管理规定",
+      "source": "sichuan",
+      "category": "政府规章",
+      "file_type": 2
+    },
+    {
+      "title": "中华人民共和国突发事件应对法",
+      "keyword": "中华人民共和国突发事件应对法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国消防法",
+      "keyword": "中华人民共和国消防法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国道路交通安全法",
+      "keyword": "中华人民共和国道路交通安全法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国行政强制法",
+      "keyword": "中华人民共和国行政强制法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国行政处罚法",
+      "keyword": "中华人民共和国行政处罚法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国公路法",
+      "keyword": "中华人民共和国公路法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国职业病防治法",
+      "keyword": "中华人民共和国职业病防治法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国建筑法",
+      "keyword": "中华人民共和国建筑法",
+      "source": "flk",
+      "category": "法律"
+    },
+    {
+      "title": "中华人民共和国道路运输条例",
+      "keyword": "中华人民共和国道路运输条例",
+      "source": "flk",
+      "category": "行政法规"
+    },
+    {
+      "title": "地质灾害防治条例",
+      "keyword": "地质灾害防治条例",
+      "source": "flk",
+      "category": "行政法规"
+    },
+    {
+      "title": "特种设备安全监察条例",
+      "keyword": "特种设备安全监察条例",
+      "source": "flk",
+      "category": "行政法规"
+    },
+    {
+      "title": "工伤保险条例",
+      "keyword": "工伤保险条例",
+      "source": "flk",
+      "category": "行政法规"
+    },
+    {
+      "title": "四川省《中华人民共和国道路交通安全法》实施办法",
+      "keyword": "道路交通安全法",
+      "source": "sichuan",
+      "category": "地方性法规",
+      "file_type": 1
+    }
+  ]
+}

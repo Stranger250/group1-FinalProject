@@ -1,0 +1,180 @@
+/* ==========================================================================
+   蜀道安全助手 · 全局设计系统「蜀道 · 青石黛」
+   视觉母题：蜀山青泥与栈道青石上的黛青、玄青侧栏、暖石板灰底、矿物系语义色。
+   目标观感：专业沉稳的安全管控平台，消除「AI 模板」感（默认蓝 / 藏青侧栏 / 彩虹色块）。
+   本文件在 element-plus/dist/index.css 之后引入，:root 覆写优先级更高，全局生效。
+   ========================================================================== */
+
+:root {
+  /* ---- 品牌主色：黛青（替代 Element Plus 默认蓝 #409eff） ---- */
+  --el-color-primary: #1e5a52;
+  --el-color-primary-light-3: #4c7f77;
+  --el-color-primary-light-5: #7aa19a;
+  --el-color-primary-light-7: #a9c2be;
+  --el-color-primary-light-8: #c2d5d2;
+  --el-color-primary-light-9: #e6efed; /* 主色浅底：标签/选中/编号方块 */
+  --el-color-primary-dark-2: #17483f;
+
+  /* ---- 语义色：矿物系（朱砂红 / 赭黄 / 青竹绿 / 青灰），替代霓虹三色 ---- */
+  --el-color-success: #2f9a6c;
+  --el-color-success-light-3: #5fb087;
+  --el-color-success-light-5: #8ec6a7;
+  --el-color-success-light-7: #bddcc8;
+  --el-color-success-light-8: #d2e7d9;
+  --el-color-success-light-9: #e9f4ee;
+  --el-color-success-dark-2: #247a55;
+
+  --el-color-warning: #c4872e;
+  --el-color-warning-light-3: #d3a158;
+  --el-color-warning-light-5: #debc87;
+  --el-color-warning-light-7: #ead6b5;
+  --el-color-warning-light-8: #efe0c6;
+  --el-color-warning-light-9: #f6f0e4;
+  --el-color-warning-dark-2: #9c6c24;
+
+  --el-color-danger: #c03a2e;
+  --el-color-danger-light-3: #d0685c;
+  --el-color-danger-light-5: #df958b;
+  --el-color-danger-light-7: #efc2bb;
+  --el-color-danger-light-8: #f3d2cc;
+  --el-color-danger-light-9: #f8e6e2;
+  --el-color-danger-dark-2: #9a2e24;
+
+  --el-color-error: #c03a2e;
+  --el-color-error-light-3: #d0685c;
+  --el-color-error-light-5: #df958b;
+  --el-color-error-light-7: #efc2bb;
+  --el-color-error-light-8: #f3d2cc;
+  --el-color-error-light-9: #f8e6e2;
+  --el-color-error-dark-2: #9a2e24;
+
+  --el-color-info: #6c7a78;
+  --el-color-info-light-3: #8a9694;
+  --el-color-info-light-5: #a8b1b0;
+  --el-color-info-light-7: #c6cccb;
+  --el-color-info-light-8: #d5dad9;
+  --el-color-info-light-9: #edefee;
+  --el-color-info-dark-2: #566260;
+
+  /* ---- 背景 / 表面 / 文字 ---- */
+  --el-bg-color-page: #f6f5f1; /* 页面背景：暖石板灰（替代 #f5f7fa） */
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+
+  --el-text-color-primary: #232b2a; /* 主文字：墨色 */
+  --el-text-color-regular: #4b5553;
+  --el-text-color-secondary: #707a78;
+  --el-text-color-placeholder: #a5acaa;
+  --el-text-color-disabled: #bfc4c2;
+
+  /* ---- 边框：暖色 ---- */
+  --el-border-color: #ddd8ce;
+  --el-border-color-light: #e5e1d7;
+  --el-border-color-lighter: #ece8df;
+  --el-border-color-extra-light: #f2efe8;
+  --el-border-color-dark: #c5bfb1;
+  --el-border-color-darker: #b9b2a3;
+  --el-border-color-hover: #b9b2a3;
+
+  /* ---- 填充 ---- */
+  --el-fill-color: #f0eee7;
+  --el-fill-color-light: #f4f2eb;
+  --el-fill-color-lighter: #f6f4ee;
+  --el-fill-color-extra-light: #f8f7f2;
+  --el-fill-color-dark: #e4e0d3;
+  --el-fill-color-darker: #dad4c4;
+  --el-fill-color-blank: #ffffff;
+
+  /* ---- 圆角 / 阴影 / 遮罩 ---- */
+  --el-border-radius-base: 6px; /* 4px → 6px，全局组件圆角抬升 */
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 999px;
+  --el-border-radius-circle: 100%;
+
+  --el-box-shadow: 0 2px 12px rgba(23, 45, 43, 0.1);
+  --el-box-shadow-light: 0 1px 2px rgba(23, 45, 43, 0.05), 0 4px 12px rgba(23, 45, 43, 0.06);
+  --el-box-shadow-lighter: 0 1px 2px rgba(23, 45, 43, 0.04);
+  --el-box-shadow-dark: 0 10px 40px rgba(12, 32, 30, 0.2);
+  --el-mask-color: rgba(12, 32, 30, 0.55);
+  --el-mask-color-extra-light: rgba(12, 32, 30, 0.3);
+
+  /* ---- 菜单（侧栏玄青，配合 Sidebar.vue 去掉硬编码 props） ---- */
+  --el-menu-bg-color: #102a28;
+  --el-menu-text-color: #9ab0ac;
+  --el-menu-active-color: #ffffff;
+  --el-menu-hover-bg-color: #1a3b38;
+  --el-menu-item-height: 44px;
+  --el-menu-sub-item-height: 40px;
+
+  /* ---- 品牌扩展 token ---- */
+  --brand: #1e5a52; /* 黛青 */
+  --brand-dark: #17483f;
+  --brand-soft: #e6efed; /* 黛青浅底 */
+  --brand-deep: #102a28; /* 玄青（侧栏） */
+  --surface: #f8f7f3; /* 暖纸面（识别结果卡等） */
+  --page-bg: #f6f5f1;
+
+  --shadow-card: 0 1px 2px rgba(23, 45, 43, 0.05), 0 4px 12px rgba(23, 45, 43, 0.06);
+  --shadow-overlay: 0 12px 40px rgba(12, 32, 30, 0.18);
+
+  /* 品牌衬线字体（蜀道品牌字：宋体衬线 + 宽字距，制造手写感而非模板感） */
+  --font-serif: 'Songti SC', 'STSong', 'Noto Serif SC', 'SimSun', serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  background-color: var(--el-bg-color-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+/* 滚动条美化（webkit）：暖灰滑块 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c6c8c4;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #aeb2ad;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 通用卡片间距 */
+.page-container {
+  padding: 16px;
+}
+
+/* 品牌字：宋体衬线 + 宽字距，用于 logo 与页面主标题 */
+.brand-font {
+  font-family: var(--font-serif);
+  letter-spacing: 0.06em;
+}
+
+/* 侧栏子菜单浮层（折叠态 teleport 到 body，超出 scoped 作用域，需全局规则） */
+.el-menu--popup .el-menu-item.is-active {
+  background-color: var(--el-color-primary);
+  color: #fff;
+}

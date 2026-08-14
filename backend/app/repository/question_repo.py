@@ -145,6 +145,21 @@ class QuestionRepo:
         )
 
     @staticmethod
+    def has_approved_rewrite(db: Session, parent_id: int) -> bool:
+        """原题是否已有「已通过」的修订版（就地替换语义下禁止再重写，防同一逻辑题重复入卷）。"""
+        return (
+            db.scalar(
+                select(Question.id)
+                .where(
+                    Question.rewrite_of == parent_id,
+                    Question.status == QuestionStatus.APPROVED,
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    @staticmethod
     def batch_stats(db: Session, batch_id: str) -> dict:
         """批次审核统计：一次 SQL 按状态分组计数。
 

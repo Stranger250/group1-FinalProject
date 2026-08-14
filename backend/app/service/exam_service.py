@@ -137,6 +137,72 @@ class ExamService:
         ExamService._get_record(db, record_id, user)
         return ExamService._finalize(db, record_id, user, reason_arg="manual", body_answers=payload.answers)
 
+    # ---------- 公开选卷 / 考试记录（前端配套接口） ----------
+
+    @staticmethod
+    def list_published_papers(
+        db: Session, user: User, page: int = 1, page_size: int = 20
+    ) -> dict:
+        """公开选卷列表（前端 /exams 选卷页，P0 阻塞项）。
+
+        仅返回 PUBLISHED 试卷，且【脱敏】——不含任何题目与答案；
+        每条附带当前用户是否有进行中记录（ongoing_record_id），供「继续考试/开始考试」分流。
+        """
+        items, total = exam_repo.ExamRepo.list_published(db, page=page, page_size=page_size)
+        ongoing = exam_repo.ExamRepo.get_ongoing_map(db, user.id)
+        return {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "items": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "total_score": p.total_score,
+                    "pass_score": p.pass_score,
+                    "duration": p.duration,
+                    "question_count": p.question_count,
+                    "gen_mode": p.gen_mode,
+                    "create_time": p.create_time.isoformat() if p.create_time else None,
+                    "ongoing_record_id": ongoing.get(p.id),
+                }
+                for p in items
+            ],
+        }
+
+    @staticmethod
+    def list_my_records(db: Session, user: User, page: int = 1, page_size: int = 20) -> dict:
+        """我的考试记录分页（前端 /exams/records 页，评审 C3 数据源）。"""
+        records, total = exam_repo.ExamRepo.list_records_by_user(
+            db, user.id, page=page, page_size=page_size
+        )
+        papers = db.scalars(
+            select(ExamPaper).where(ExamPaper.id.in_([r.paper_id for r in records] or [0]))
+        ).all()
+        paper_map = {p.id: p for p in papers}
+        return {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "items": [
+                {
+                    "record_id": r.id,
+                    "paper_id": r.paper_id,
+                    "paper_name": paper_map[r.paper_id].name if r.paper_id in paper_map else "（试卷已删除）",
+                    "state": r.state,
+                    "status": r.status,
+                    "score": r.score,
+                    "pass_score": paper_map[r.paper_id].pass_score if r.paper_id in paper_map else None,
+                    "passed": r.status == ExamRecordResultStatus.PASS,
+                    "reason": r.submit_reason,
+                    "cheat_count": r.cheat_count,
+                    "start_time": r.start_time.isoformat() if r.start_time else None,
+                    "submitted_at": r.end_time.isoformat() if r.end_time else None,
+                }
+                for r in records
+            ],
+        }
+
     # ---------- 成绩单 ----------
 
     @staticmethod
@@ -333,7 +399,8 @@ class ExamService:
             "state": record.state,
             "status": record.status,
             "reason": record.submit_reason,
-            "total_score": record.score,
+            "total_score": paper.total_score,
+            "score": record.score,
             "pass_score": paper.pass_score,
             "passed": record.score >= paper.pass_score,
             "submitted_at": record.end_time.isoformat() if record.end_time else None,
