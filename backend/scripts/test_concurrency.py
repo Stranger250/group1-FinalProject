@@ -5,10 +5,14 @@
   3. 并发注册同用户名：一个成功其余 400（非 500）
   4. 并发 save 同题：不炸、最终答案一致
 """
+import os
 import sys
 import threading
 import time
 from datetime import datetime
+
+# 从 backend 根导入 app.*（数据库凭据从 backend/.env 读取，勿硬编码）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -108,10 +112,14 @@ def main() -> None:
     ok("并发 start 全部 200（复用同一进行中记录）",
        all(code == 200 for code, _ in start_results), f"results={start_results}")
     rec_id = None
-    # 从服务端确认只有一条 ONGOING
+    # 从服务端确认只有一条 ONGOING；数据库凭据从 backend/.env 的 DATABASE_URL 读取（勿硬编码）
     import pymysql
-    dbc = pymysql.connect(host="127.0.0.1", port=3306, user="root", password="123456",
-                          database="shudao", charset="utf8mb4")
+    from sqlalchemy.engine import make_url
+    from app.core.config import get_settings
+    _u = make_url(get_settings().database_url)
+    dbc = pymysql.connect(host=_u.host, port=_u.port or 3306, user=_u.username,
+                          password=_u.password or "", database=_u.database,
+                          charset="utf8mb4")
     cur = dbc.cursor()
     cur.execute("SELECT id, user_id FROM exam_record WHERE paper_id=%s AND state='ONGOING'", (pid,))
     ongoing = cur.fetchall()
