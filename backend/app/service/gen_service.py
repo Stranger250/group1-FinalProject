@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..ai.law_corpus import load_corpus
 from ..ai.llm_client import LLMError, chat_json
-from ..ai.prompts import build_generate_prompt, build_rewrite_prompt
+from ..ai.prompts import _allocate, build_generate_prompt, build_rewrite_prompt
 from ..core.config import get_settings
 from ..model.question import Question, QuestionSource, QuestionStatus, QuestionType
 from ..repository import question_repo
@@ -105,6 +105,31 @@ def _normalize_sources(raw, title: str, article_no: str) -> list[dict]:
     return out
 
 
+def _plan_chunks(allocation: list[tuple[str, int]], chunk_size: int) -> list[list[tuple[str, int]]]:
+    """把全局题型配额切成 ≤chunk_size 的分轮配额，返回分轮列表（各轮求和 = 全局配额）。
+
+    保证连续同类型配额尽量同轮、跨轮只拆同一类型的余量，避免一轮混合过多题型。
+    例如 [(S,8),(M,8),(J,7),(F,7)]、chunk=20 → [[(S,8),(M,8),(J,4)], [(J,3),(F,7)]]。
+    仅当 count > gen_chunk_size 时走分轮；单轮内配额与旧版 _allocate(types,count) 完全一致。
+    """
+    pending = list(allocation)
+    chunks: list[list[tuple[str, int]]] = []
+    while pending:
+        chunk: list[tuple[str, int]] = []
+        room = chunk_size
+        while pending and room > 0:
+            t, n = pending[0]
+            take = min(n, room)
+            chunk.append((t, take))
+            room -= take
+            if take < n:
+                pending[0] = (t, n - take)  # 本类型剩余留给下一轮
+            else:
+                pending.pop(0)
+        chunks.append(chunk)
+    return chunks
+
+
 class _RewriteRetry(Exception):
     """重写输出不合要求，触发带约束重试（内部异常，不直接进 HTTP 响应）。"""
 
@@ -183,37 +208,78 @@ class GenService:
         settings = get_settings()
         corpus = load_corpus()
 
-        # 1) 检索：优先限定法规，无结果则降级全库检索（top_k 放宽）
-        articles = corpus.search(payload.knowledge_point, top_k=6, law_title=payload.law_title)
-        if not articles:
-            articles = corpus.search(payload.knowledge_point, top_k=8)
-        if not articles:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="未检索到相关法规条款，请更换知识点")
+        # 0) 入参归一：知识点与参考文档至少其一（参考文档限定出题范围，E02 增强）
+        kp = (payload.knowledge_point or "").strip()
+        ref = (payload.reference_text or "").strip()
+        ref_title = (payload.reference_title or "").strip() or "上传参考文档"
+        if not kp and not ref:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="请填写知识点或上传参考文档")
+        topic = kp or ref_title  # 用于 prompt 任务行与每题 knowledge_point 兜底
 
-        # 2) 构造 Prompt（角色 + 知识条款 + 题型数量难度）
-        system, user = build_generate_prompt(
-            payload.knowledge_point, articles, payload.types, payload.difficulty, payload.count
+        # 1) 检索：优先限定法规，无结果则降级全库检索（top_k 放宽）。
+        #    有参考文档时检索词取知识点或文档前 64 字；仍无结果允许仅凭文档出题。
+        search_term = kp or ref[:64]
+        articles = corpus.search(search_term, top_k=6, law_title=payload.law_title)
+        if not articles:
+            articles = corpus.search(search_term, top_k=8)
+        if not articles and ref:
+            articles = []  # 有参考文档时允许仅凭文档出题
+        if not articles:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, detail="未检索到相关法规条款，请更换知识点或上传参考文档"
+            )
+
+        # 2) 题型配额 + 分轮：单轮 ≤ gen_chunk_size，避免单次 LLM 输出超长被截断导致 JSON 解析失败。
+        #    count ≤ chunk 走单次调用（配额与旧版一致，回归安全）；count > chunk 拆成多轮，
+        #    各轮独立调用 LLM，结果合并进同一 batch_id（用户侧仍是一个批次）。
+        allocation = _allocate(payload.types, payload.count)
+        plans: list[list[tuple[str, int]]] = (
+            [allocation]
+            if payload.count <= settings.gen_chunk_size
+            else _plan_chunks(allocation, settings.gen_chunk_size)
         )
+        n_plans = len(plans)
 
         # 3) LLM 生成 + Pydantic 校验：解析失败或题量不足自动重试，仍失败抛 502
-        out: GenOutput | None = None
-        for attempt in range(1, _MAX_ATTEMPTS + 1):
-            try:
-                raw = await chat_json(system, user)
-                out = GenOutput.model_validate(raw)
-            except (LLMError, ValidationError):
+        questions: list[GenQuestion] = []
+        for plan_i, plan in enumerate(plans, 1):
+            plan_total = sum(n for _, n in plan)
+            system, user = build_generate_prompt(
+                topic,
+                articles,
+                payload.types,
+                payload.difficulty,
+                plan_total,
+                allocation=plan,
+                reference_text=ref or None,
+                reference_title=ref_title or None,
+            )
+            # 单轮沿用「≥gen_min_count」的宽松验收（旧版行为不变）；
+            # 分轮时须凑够本轮配额，否则整批题量不符预期。
+            min_count = settings.gen_min_count if n_plans == 1 else plan_total
+            out: GenOutput | None = None
+            for attempt in range(1, _MAX_ATTEMPTS + 1):
+                try:
+                    raw = await chat_json(system, user)
+                    out = GenOutput.model_validate(raw)
+                except (LLMError, ValidationError):
+                    if attempt < _MAX_ATTEMPTS:
+                        continue
+                    raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="AI 输出不符合要求")
+                got = list(out.questions)
+                if len(got) >= min_count:
+                    questions.extend(got)
+                    break
                 if attempt < _MAX_ATTEMPTS:
                     continue
-                raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="AI 输出不符合要求")
-            questions = list(out.questions)
-            if len(questions) >= settings.gen_min_count:
-                break  # 达到最低题量（≥5，PRD E02 验收）
-            if attempt < _MAX_ATTEMPTS:
-                continue
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=f"AI 输出不符合要求（题量不足：{len(questions)} 题，要求至少 {settings.gen_min_count} 题）",
-            )
+                round_hint = f"（第 {plan_i}/{n_plans} 轮）" if n_plans > 1 else ""
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        f"AI 输出不符合要求{round_hint}（题量不足：{len(got)} 题，"
+                        f"要求{'至少 ' if n_plans == 1 else ''}{min_count} 题）"
+                    ),
+                )
 
         # 4) 逐题规范化 + 校验（题型/难度/答案/溯源）
         #    【先全部校验、再统一入库】——任何一题校验失败都不产生任何落库，
@@ -225,7 +291,7 @@ class GenService:
             data = q.model_dump() if hasattr(q, "model_dump") else dict(q)
             type_ = str(data.get("type") or "").strip().upper()
             difficulty = str(data.get("difficulty") or "").strip().upper()
-            knowledge_point = (str(data.get("knowledge_point") or payload.knowledge_point)).strip()
+            knowledge_point = (str(data.get("knowledge_point") or topic)).strip()
             content = str(data.get("content") or "").strip()
             # FILL 答案为自由文本（可含小写/数字），不做大写归一；其余题型答案收敛大写
             answer_raw = str(data.get("answer") or "").strip()
@@ -251,17 +317,20 @@ class GenService:
             except HTTPException as exc:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"第{i + 1}题校验失败：{exc.detail}")
 
-            # 溯源：缺失/为空则从检索条款整对补全，仍无则 400。
+            # 溯源：缺失/为空则从检索条款整对补全；有参考文档时兜底锚定到参考文档，仍无则 400。
             # 整对替换避免跨法规错配（如保留 LLM 的 title + 取另一部法规的条号）。
             src_title = str(data.get("source_law_title") or "").strip()
             src_article_no = str(data.get("source_article_no") or "").strip()
             if not src_title or not src_article_no:
                 pick = _pick_source(articles, knowledge_point, src_title or None)
-                if pick is None:
+                if pick is None and ref:
+                    src_title, src_article_no = ref_title, "（上传参考文档）"
+                elif pick is None:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="题目缺少法规溯源")
-                src_title, src_article_no = pick["law_title"], pick["article_no"]
-            # 主要溯源法规必须在知识库内
-            if src_title not in law_titles:
+                else:
+                    src_title, src_article_no = pick["law_title"], pick["article_no"]
+            # 主要溯源法规必须在知识库内（锚定到参考文档的 title 豁免）
+            if src_title != ref_title and src_title not in law_titles:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="溯源法规不在知识库")
             sources = _normalize_sources(data.get("sources"), src_title, src_article_no)
 
@@ -289,17 +358,19 @@ class GenService:
         return {
             "batch_id": batch_id,
             "count": len(prepared),
-            "knowledge_point": payload.knowledge_point,
+            "knowledge_point": topic,
             "difficulty": payload.difficulty,
         }
 
     @staticmethod
     async def rewrite(db: Session, qid: int, payload: RewriteIn, operator_id: int) -> dict:
-        """按驳回意见 AI 重写已驳回的 AI 题，产出修订版新题入 PENDING 草稿。
+        """按驳回意见 AI 重写已驳回的 AI 题，就地替换原题内容后回到 PENDING 草稿。
 
-        - 仅 source=ai 且 status=REJECTED 可重写；原题状态不变（保留驳回留痕）；
-        - 原题已存在待审/已通过修订版时拒绝（409，DB 层 uk_rewrite_pending 兜底并发）；
-        - 修订版独立成新 batch（ai_ 前缀），rewrite_of 指向原题 id，rewrite_feedback 存修订要求；
+        - 仅 source=ai 且 status=REJECTED 可重写；就地覆盖题干/选项/答案/解析，状态回到 PENDING 重新审核，
+          不新建批次、不产生新题（对齐「重新生成后就地替换」的确认语义）；
+        - 原题已有「已通过」修订版时拒绝（409，防同一逻辑题重复入卷）；
+          存量「待审」修订版（旧独立批次设计遗留）不阻断，落库时自动顶替为 REJECTED；
+        - rewrite_feedback 存修订要求，清驳回意见 review_note，重置 interference_verified 需重新核对；
         - LLM 输出不合要求自动重试（形状/题型漂移/未实质修订等），仍失败抛 502。
         """
         q = question_repo.QuestionRepo.get_by_id(db, qid)
@@ -309,9 +380,9 @@ class GenService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="仅可重写 AI 生成题目")
         if q.status != QuestionStatus.REJECTED:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="仅可重写已驳回（REJECTED）的题目")
-        # 已存在待审/已通过修订版时不再重写：待审→防并发/重复草稿，已通过→防同一逻辑题重复入卷
-        if question_repo.QuestionRepo.has_active_rewrite(db, qid):
-            raise HTTPException(status.HTTP_409_CONFLICT, detail="该题已存在修订版（待审或已通过），请先处理修订版")
+        # 就地替换语义：已通过的修订版已取代本原题，禁止再重写；待审修订版在落库时自动顶替，不再 409 阻断
+        if question_repo.QuestionRepo.has_approved_rewrite(db, qid):
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="该题已有已通过的修订版，请先处理修订版")
 
         corpus = load_corpus()
         law_titles = set(corpus.law_titles)
@@ -359,13 +430,16 @@ class GenService:
                 raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=f"AI 重写失败：{last_err}{hint}")
             break
 
-        batch_id = "ai_" + uuid.uuid4().hex[:12]
         try:
-            new_q = question_repo.QuestionRepo.create(
+            # 顶掉存量待审修订版（旧「独立批次」设计遗留），避免同一逻辑题出现两个待审版本
+            legacy = question_repo.QuestionRepo.get_pending_rewrite(db, q.id)
+            if legacy is not None:
+                legacy.status = QuestionStatus.REJECTED
+                legacy.review_note = "被新一次重写顶替"
+            # 就地替换：覆盖原题内容并回到「待审核」，批次不变
+            question_repo.QuestionRepo.update(
                 db,
-                batch_id=batch_id,
-                rewrite_of=q.id,
-                rewrite_feedback=payload.feedback,
+                q,
                 type=final["type"],
                 content=final["content"],
                 options=final["options"],
@@ -373,16 +447,19 @@ class GenService:
                 analysis=final["analysis"],
                 knowledge_point=final["knowledge_point"],
                 difficulty=final["difficulty"],
-                source=QuestionSource.AI,
                 sources=final["sources"],
                 source_law_title=final["source_law_title"],
                 source_article_no=final["source_article_no"],
-                status=QuestionStatus.PENDING,
+                status=QuestionStatus.PENDING,  # 重新进入审核队列
+                review_note=None,               # 清掉旧的驳回意见
+                rewrite_feedback=payload.feedback,
+                interference_verified=0,        # 内容已变，需重新核对干扰项
+                rewrite_of=None,                # 就地替换，不再是「某题的修订版」
             )
         except IntegrityError:
             db.rollback()
-            raise HTTPException(status.HTTP_409_CONFLICT, detail="该题已存在待审核的修订版，请先处理")
-        return _to_dict(new_q)
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="该题已有待审核的修订版，请先处理")
+        return _to_dict(q)
 
     @staticmethod
     def list_batches(db: Session) -> list[dict]:

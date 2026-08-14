@@ -15,10 +15,14 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from ..ai.doc_extract import REF_DOC_EXTS, extract_text
 from ..ai.llm_client import LLMError
+from ..core.config import get_settings
 from ..core.database import get_db
 from ..core.security import require_roles
 from ..model.user import RoleId
@@ -51,6 +55,51 @@ async def generate(
     except LLMError as e:
         raise HTTPException(status_code=502, detail=f"AI 生成失败：{e}")
     return resp(data)
+
+
+@router.post("/doc", summary="上传出题参考文档（解析文本，供 AI 限定出题范围）")
+async def upload_ref_doc(
+    file: UploadFile = File(...),
+    _=Depends(_MANAGE),
+):
+    """上传出题参考文档：解析为纯文本回传（不落盘），供 AI 出题限定范围。
+
+    - 支持格式：txt/md/pdf/docx（REF_DOC_EXTS），非法扩展名 400；
+    - 大小上限 settings.max_upload_mb（默认 5MB），超出 413；
+    - 文本超 settings.ref_doc_max_chars（默认 5000）截断并标记 truncated=True；
+    - 提取结果含 filename/size/chars/truncated/text，text 由前端回传 /generate。
+    """
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in REF_DOC_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文档类型（仅支持 {'/'.join(sorted(REF_DOC_EXTS))}）",
+        )
+    data = await file.read()
+    settings = get_settings()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="文档过大（上限 5MB）")
+    try:
+        text = extract_text(file.filename, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # pdfplumber / python-docx 未装或解析失败
+        raise HTTPException(status_code=500, detail=f"文档解析失败：{exc}")
+    chars = len(text)
+    truncated = chars > settings.ref_doc_max_chars
+    if truncated:
+        text = text[: settings.ref_doc_max_chars]
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="无法从文档中提取到文本内容，请更换文档")
+    return resp(
+        {
+            "filename": file.filename,
+            "size": len(data),
+            "chars": chars,
+            "truncated": truncated,
+            "text": text,
+        }
+    )
 
 
 @router.get("/batches", summary="生成批次列表（含审核通过率）")

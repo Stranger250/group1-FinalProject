@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ..core.config import get_settings
+
 AiQuestionType = Literal["SINGLE", "MULTIPLE", "JUDGE", "FILL"]
 AiQuestionDifficulty = Literal["EASY", "MEDIUM", "HARD"]
 AiReviewAction = Literal["APPROVE", "REJECT"]
@@ -20,20 +22,41 @@ class GenRequest(BaseModel):
 
     技术决策：入库状态机（DATABASE.md §6.1）——生成仅入草稿（source=ai, status=PENDING），
     审核通过才 APPROVED。
+    提供 reference_text 时 knowledge_point 可空，以文档限定出题范围（E02 上传参考文档）。
     """
 
-    knowledge_point: str = Field(min_length=1, max_length=64)
+    knowledge_point: str | None = Field(default=None, min_length=1, max_length=64)
     types: list[AiQuestionType] = Field(min_length=1)  # 元素枚举 SINGLE/MULTIPLE/JUDGE/FILL，至少一种题型
     difficulty: AiQuestionDifficulty  # EASY/MEDIUM/HARD
-    count: int = Field(ge=1, le=20)
+    count: int = Field(ge=1)  # 上下限由 _count_bounds 依据 settings.gen_min_count / gen_max_count 校验（单一真源）
     law_title: str | None = Field(default=None, max_length=128)
+    # 上传参考文档（/doc 端点解析出的纯文本，最外层经 ref_doc_max_chars 截断）
+    reference_text: str | None = Field(default=None, max_length=6000)
+    # 上传参考文档文件名（溯源显示名）
+    reference_title: str | None = Field(default=None, max_length=128)
 
     @field_validator("count")
     @classmethod
-    def _count_at_least_five(cls, v: int) -> int:
-        if v < 5:
-            raise ValueError("每次生成不少于 5 题（PRD E02 验收）")
+    def _count_bounds(cls, v: int) -> int:
+        s = get_settings()
+        if v < s.gen_min_count:
+            raise ValueError(f"每次生成不少于 {s.gen_min_count} 题（PRD E02 验收）")
+        if v > s.gen_max_count:
+            raise ValueError(f"每次生成不超过 {s.gen_max_count} 题（超出上限请分批生成）")
         return v
+
+
+class RefDocOut(BaseModel):
+    """参考文档解析结果（/doc 端点回传，纯文本由前端再回传 /generate 限定出题范围）。
+
+    truncated=True 表示文本超出 ref_doc_max_chars 已被截断；text 为截断后的纯文本。
+    """
+
+    filename: str
+    size: int
+    chars: int
+    truncated: bool
+    text: str
 
 
 class SourceItem(BaseModel):

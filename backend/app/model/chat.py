@@ -70,6 +70,9 @@ class MessageSource(Base):
     # document_id / chunk_id 是 BIGINT 逻辑外键，指向 knowledge_document.id / knowledge_chunk.id
     document_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     chunk_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # doc_id/article_no 是检索层原文定位（get_article 查回父块用），历史引用可点击查看原文
+    doc_id: Mapped[str | None] = mapped_column(String(64))
+    article_no: Mapped[str | None] = mapped_column(String(64))
     document_name: Mapped[str] = mapped_column(String(255), nullable=False)
     chapter: Mapped[str | None] = mapped_column(String(128))
     content: Mapped[str] = mapped_column(Text, nullable=False)

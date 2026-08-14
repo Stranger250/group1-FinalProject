@@ -184,8 +184,10 @@ class HybridRetriever:
             [round(x, 4) for x in result.rrf_pool[:5]],
         )
 
-        # 组装返回块
-        result.blocks = [self._to_block(cid, rrf.get(cid, 0.0), confidence, cid in expanded_ids)
+        # 组装返回块：rrf_score 用「父块聚合分」（parent_rrf，子块回溯取 max），
+        # 使被二次分块的长条文父块也有真实融合分（此前用子块级 rrf.get(cid)，
+        # 对拆分条恒为 0 → 相关度条/落库分为空）。展开块不在 parent_rrf，得 0（展示走 floor）。
+        result.blocks = [self._to_block(cid, parent_rrf.get(cid, 0.0), confidence, cid in expanded_ids)
                          for cid in top_ids if cid in self._meta_by_id]
         return result
 

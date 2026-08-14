@@ -36,7 +36,7 @@ from ..ai.llm_client import LLMError, chat_stream
 from ..ai.prompts import build_qa_prompt
 from ..core.config import get_settings
 from ..model.chat import MessageStatus, MessageRole
-from ..rag.citations import RetrievedBlock, build_citations
+from ..rag.citations import RetrievedBlock, build_citations, display_score
 from ..rag.rag_config import RAGParams
 from ..rag.retriever import ACCESS_EMPLOYEE, get_retriever
 from ..rag.rewriter import rewrite_query
@@ -236,8 +236,10 @@ class QaService:
 
         source 的 document_id/chunk_id 来自 Chroma metadata 里回填的 db 自增 int
         （G3：message_source 可 join 回 knowledge_document/knowledge_chunk）。
-        score 用块级 rrf_score（展开块无 RRF 分则存空）。
+        score 存「展示相关度」（display_score 相对理论峰值归一化；展开块存下限 0.05），
+        与 live to_source 同口径，历史消息相关度条不再 1%-3%。
         """
+        rrf_k = RAGParams.from_settings().rrf_k
         msg = MessageRepo.create(
             db, commit=False,
             conversation_id=conv.id,
@@ -254,10 +256,12 @@ class QaService:
                 "message_id": msg.id,
                 "document_id": b.db_doc_id,
                 "chunk_id": b.db_chunk_id,
+                "doc_id": b.doc_id or None,
+                "article_no": b.article_no or None,
                 "document_name": b.title or "",
                 "chapter": b.chapter or None,
                 "content": (b.content or "")[:500],
-                "score": _to_score(b.rrf_score),
+                "score": _to_score(display_score(b.rrf_score, rrf_k)),
             })
         if sources:
             MessageSourceRepo.create_many(db, sources)

@@ -231,6 +231,68 @@ def _migrate_ai_chat(cur, db: str) -> bool:
     return True
 
 
+def _migrate_message_source_source_loc(cur, db: str) -> bool:
+    """模块二 AI 助手迁移（幂等）：message_source 补 doc_id/article_no 列（历史引用可点击查看原文）。
+
+    历史 sources 缺原文定位 → 前端 normalizeStoredSource 一律 clickable=false（「无法点击查看来源」）。
+    补列后新回答落库即带 doc_id/article_no，历史旧行保持 NULL（不可点击，不回填）。
+    schema.sql 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表补列，这里针对旧库做幂等 ALTER。
+    """
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='message_source'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    adds = []
+    if "doc_id" not in cols:
+        adds.append("ADD COLUMN doc_id VARCHAR(64) NULL")
+    if "article_no" not in cols:
+        adds.append("ADD COLUMN article_no VARCHAR(64) NULL")
+    if not adds:
+        return False
+    cur.execute("ALTER TABLE message_source " + ", ".join(adds))
+    return True
+
+
+def _migrate_user_profile(cur, db: str) -> bool:
+    """个人中心迁移（幂等）：user 表补 email/avatar 列（T2 个人中心，无 email/头像的历史字段）。
+    schema.sql 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表补列，这里针对旧库做幂等 ALTER。
+    """
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='user'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    adds = []
+    if "email" not in cols:
+        adds.append("ADD COLUMN email VARCHAR(120) NULL")
+    if "avatar" not in cols:
+        adds.append("ADD COLUMN avatar VARCHAR(255) NULL")
+    if not adds:
+        return False
+    cur.execute("ALTER TABLE `user` " + ", ".join(adds))
+    return True
+
+
+def _migrate_message_source_score_normalize(cur, db: str) -> bool:
+    """模块二 AI 助手数据迁移（幂等）：存量 message_source.score 从「原始 RRF 融合分」归一化到展示口径。
+
+    旧版落库的是原始 RRF 分（≈1/(60+rank)，双路 top1 最大约 0.033），前端 ×100 渲染成 1%-3% 短条。
+    展示口径 = 相对理论峰值：score × (rrf_k+1)/2（rrf_k=60 → ×30.5），与 retriever 置信度同公式。
+    阈值 <0.05：旧原始分最大 0.033；新写入的展示分最小 0.05（展开块下限）、真实命中 ≥0.28，
+    故该条件只会命中旧数据，重跑天然幂等、不会二次放大新分。
+    """
+    factor = (get_settings().rag_rrf_k + 1) / 2.0
+    cur.execute(
+        "UPDATE message_source SET score = LEAST(1.0, ROUND(score * %s, 4)) "
+        "WHERE score IS NOT NULL AND score > 0 AND score < 0.05",
+        (factor,),
+    )
+    return cur.rowcount > 0
+
+
 def main() -> None:
     user, pw, host, port, db = parse_db_url(get_settings().database_url)
     settings = get_settings()
@@ -289,6 +351,21 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_ai_chat(cur, db):
                 print("[OK] message 表迁移：新增 feedback 列（A07 反馈）")
+
+        # 2.9) 模块二 AI 助手迁移（幂等）：message_source 补 doc_id/article_no 列（历史引用可点击）
+        with conn.cursor() as cur:
+            if _migrate_message_source_source_loc(cur, db):
+                print("[OK] message_source 表迁移：新增 doc_id/article_no 列（历史引用可点击查看原文）")
+
+        # 2.10) 模块二 AI 助手数据迁移（幂等）：存量 message_source.score 归一化到展示口径
+        with conn.cursor() as cur:
+            if _migrate_message_source_score_normalize(cur, db):
+                print("[OK] message_source 数据迁移：存量相关度分归一化到展示口径")
+
+        # 2.11) 个人中心迁移（幂等）：user 表补 email/avatar 列
+        with conn.cursor() as cur:
+            if _migrate_user_profile(cur, db):
+                print("[OK] user 表迁移：新增 email/avatar 列（个人中心）")
 
         # 3) 初始化角色（幂等）
         with conn.cursor() as cur:

@@ -89,6 +89,8 @@ class ChatService:
                     item["sources"].append({
                         "document_id": s.document_id,
                         "chunk_id": s.chunk_id,
+                        "doc_id": s.doc_id,
+                        "article_no": s.article_no,
                         "document_name": s.document_name,
                         "chapter": s.chapter,
                         "content": s.content,
@@ -107,6 +109,8 @@ class ChatService:
             {
                 "document_id": s.document_id,
                 "chunk_id": s.chunk_id,
+                "doc_id": s.doc_id,
+                "article_no": s.article_no,
                 "document_name": s.document_name,
                 "chapter": s.chapter,
                 "content": s.content,
