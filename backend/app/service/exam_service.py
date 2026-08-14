@@ -249,6 +249,10 @@ class ExamService:
         # 5) 整卷判分 + 落明细 + 写总分/结果/原因（随事务提交）
         ExamService._grade_all(db, record, paper, reason)
         db.commit()
+        # 审计：交卷（含自动交卷原因）
+        from ..utils.audit import write_audit
+        write_audit(db, user, "exam_submit", target_type="exam_record", target_id=record_id,
+                    detail=f"paper={paper.id} score={record.score} reason={reason} passed={record.status}")
         return ExamService._result_sheet(db, record)
 
     @staticmethod

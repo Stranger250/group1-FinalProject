@@ -45,6 +45,32 @@ def list_my_records(
     return resp(ExamService.list_my_records(db, user, page=page, page_size=page_size))
 
 
+@router.get("/stats", summary="考试统计（本人；ADMIN 可传 all=1 看全站）")
+def exam_stats(
+    all_: int = Query(default=0, alias="all", ge=0, le=1,
+                      description="1=全站统计（仅 ADMIN 生效）"),
+    paper_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """统计：总览（记录数/通过率/平均分）+ 错题排行 + 知识点掌握度。"""
+    from ..service.exam_stats_service import exam_stats as _stats
+    scope_user = None if (all_ == 1 and user.role_id == 3) else user.id
+    return resp(_stats(db, user_id=scope_user, paper_id=paper_id))
+
+
+@router.get("/wrong-book", summary="错题本（本人错误作答明细，分页）")
+def wrong_book(
+    page: int = Query(default=1, ge=1, le=100000),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """错题本：本人全部错误作答（去重题目），按最近出错倒序分页。"""
+    from ..service.exam_stats_service import wrong_book as _wrong
+    return resp(_wrong(db, user.id, page=page, page_size=page_size))
+
+
 @router.post("/start", summary="开始考试（或刷新复用进行中的考试）")
 def start(
     payload: ExamStartIn,

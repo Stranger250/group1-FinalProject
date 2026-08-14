@@ -7,6 +7,7 @@ import type {
   ExamRecordItem,
   ExamSheet,
   ExamStartPayload,
+  ExamStats,
   ExamSwitchPayload,
   GeneratePayload,
   GenerateResult,
@@ -30,6 +31,7 @@ import type {
   ResultSheet,
   ReviewPayload,
   SwitchResult,
+  WrongBookItem,
 } from '@/types/models/exam'
 
 // ---------- E01 题库（SAFETY/ADMIN） ----------
@@ -200,4 +202,44 @@ export function switchExam(recordId: number, payload: ExamSwitchPayload) {
 /** 成绩单 */
 export function getExamResult(recordId: number) {
   return request<ResultSheet>({ url: `/exams/${recordId}/result`, method: 'GET' })
+}
+
+// ---------- 考试统计 / 错题本 ----------
+
+/** 考试统计（本人；ADMIN all=1 看全站） */
+export function getExamStats(all = 0) {
+  return request<ExamStats>({ url: '/exams/stats', method: 'GET', params: cleanParams({ all }) })
+}
+
+/** 我的错题本（分页） */
+export function getWrongBook(page = 1, pageSize = 20) {
+  return request<PageResult<WrongBookItem>>({
+    url: '/exams/wrong-book',
+    method: 'GET',
+    params: cleanParams({ page, page_size: pageSize }),
+  })
+}
+
+// ---------- Excel 批量导入/导出（题库） ----------
+
+/** 导出全部题目 xlsx（浏览器直接下载） */
+export function exportQuestionsUrl(): string {
+  return '/api/v1/questions/export'
+}
+
+/** 下载导入模板 xlsx */
+export function exportTemplateUrl(): string {
+  return '/api/v1/questions/export/template'
+}
+
+/** 批量导入题目 xlsx → {imported, errors:[{row,error}]} */
+export function importQuestions(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return uploadRequest<{ imported: number; errors: { row: number; error: string }[] }>({
+    url: '/questions/import',
+    method: 'POST',
+    data: form,
+    timeout: 60_000,
+  })
 }

@@ -308,3 +308,25 @@ export interface ExamAnswerPayload {
 export interface ExamSwitchPayload {
   cheat_count: number
 }
+
+/** 考试统计（/exams/stats） */
+export interface ExamStats {
+  total_exams: number
+  passed_exams: number
+  pass_rate: number
+  avg_score: number
+  wrong_top: { question_id: number; wrong_count: number }[]
+  knowledge_mastery: { knowledge_point: string; total: number; correct: number; mastery: number }[]
+}
+
+/** 错题本条目（/exams/wrong-book） */
+export interface WrongBookItem {
+  question_id: number
+  type: QuestionType
+  content: string
+  options: string[] | null
+  correct_answer: string
+  user_answer: string
+  analysis: string | null
+  knowledge_point: string
+}

@@ -33,9 +33,50 @@
         <el-button type="primary" :icon="'Search'" @click="handleSearch">搜索</el-button>
         <el-button :icon="'Refresh'" @click="handleReset">重置</el-button>
         <div class="filter-spacer" />
+        <el-button :icon="'Upload'" @click="openImport">导入</el-button>
+        <el-button :icon="'Download'" @click="doExport">导出</el-button>
+        <el-button text @click="doDownloadTemplate">模板</el-button>
         <el-button type="primary" :icon="'Plus'" @click="openCreate">新建题目</el-button>
       </div>
     </el-card>
+
+    <!-- 导入对话框 -->
+    <el-dialog v-model="importVisible" title="批量导入题目（xlsx）" width="560px" :close-on-click-modal="false">
+      <el-alert type="info" :closable="false" class="import-tip">
+        表头：type / content / options（多选项用 | 分隔）/ answer / analysis / knowledge_point / difficulty。
+        可先下载<el-link type="primary" @click="doDownloadTemplate">导入模板</el-link>参考格式。
+      </el-alert>
+      <el-upload
+        drag
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xlsm"
+        :on-change="onImportFileChange"
+        :on-remove="() => (importFile = null)"
+        style="margin-top: 12px"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">拖拽 .xlsx 文件到此处，或<em>点击选择</em></div>
+      </el-upload>
+      <div v-if="importResult" class="import-result">
+        <el-alert
+          v-if="importResult.imported > 0"
+          type="success"
+          :closable="false"
+          :title="`成功导入 ${importResult.imported} 道题`"
+        />
+        <el-alert v-if="importResult.errors?.length" type="warning" :closable="false"
+                  :title="`${importResult.errors.length} 行校验失败`">
+          <div v-for="e in importResult.errors.slice(0, 8)" :key="e.row" class="import-err">
+            第 {{ e.row }} 行：{{ e.error }}
+          </div>
+        </el-alert>
+      </div>
+      <template #footer>
+        <el-button @click="importVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="doImport">开始导入</el-button>
+      </template>
+    </el-dialog>
 
     <el-card shadow="never">
       <el-table v-loading="loading" :data="pageData?.items ?? []" stripe>
@@ -104,12 +145,62 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
 import { DIFFICULTIES, QUESTION_STATUSES, QUESTION_TYPES, difficultyMeta, questionStatusMeta, questionTypeLabel } from '@/utils/constants'
-import { deleteQuestion, listQuestions, type QuestionQuery } from '@/api/exam'
+import { deleteQuestion, exportQuestionsUrl, exportTemplateUrl, importQuestions, listQuestions, type QuestionQuery } from '@/api/exam'
 import type { PageResult } from '@/types/api'
 import type { Question, QuestionDifficulty, QuestionStatus, QuestionType } from '@/types/models/exam'
 import QuestionFormDialog from '@/components/exam/QuestionFormDialog.vue'
+
+// ---------- Excel 导入/导出 ----------
+const importVisible = ref(false)
+const importing = ref(false)
+const importFile = ref<File | null>(null)
+const importResult = ref<{ imported: number; errors: { row: number; error: string }[] } | null>(null)
+
+function openImport(): void {
+  importVisible.value = true
+  importFile.value = null
+  importResult.value = null
+}
+
+function onImportFileChange(file: UploadFile): void {
+  importFile.value = (file.raw as File) ?? null
+}
+
+function doDownloadTemplate(): void {
+  window.open(exportTemplateUrl(), '_blank')
+}
+
+function doExport(): void {
+  window.open(exportQuestionsUrl(), '_blank')
+}
+
+async function doImport(): Promise<void> {
+  if (!importFile.value) {
+    ElMessage.warning('请先选择 .xlsx 文件')
+    return
+  }
+  importing.value = true
+  importResult.value = null
+  try {
+    const res = await importQuestions(importFile.value)
+    if (res.code === 200) {
+      importResult.value = res.data
+      if (res.data.imported > 0) {
+        ElMessage.success(`成功导入 ${res.data.imported} 道题`)
+        void load()
+      }
+    } else {
+      ElMessage.error(res.message || '导入失败')
+    }
+  } catch {
+    /* 全局提示 */
+  } finally {
+    importing.value = false
+  }
+}
 
 const SOURCE_OPTIONS = [
   { value: 'manual', label: '人工录入' },

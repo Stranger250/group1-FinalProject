@@ -28,6 +28,9 @@ class AuthService:
             # 并发同用户名注册：预检未拦截时撞 uk_username，须转 400 而非裸 500（#10）
             db.rollback()
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
+        from ..utils.audit import write_audit
+        write_audit(db, user, "register", target_type="user", target_id=user.id,
+                    detail=f"username={username}")
         return _user_payload(user)
 
     @staticmethod

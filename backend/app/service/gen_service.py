@@ -422,6 +422,12 @@ class GenService:
 
         question_repo.QuestionRepo.create_batch(db, prepared)  # 单事务：整批或整批无
 
+        from ..model.user import User
+        from ..utils.audit import write_audit
+        operator = db.get(User, operator_id)
+        write_audit(db, operator, "ai_generate", target_type="question", target_id=batch_id,
+                    detail=f"kp={topic} count={len(prepared)} difficulty={payload.difficulty}")
+
         return {
             "batch_id": batch_id,
             "count": len(prepared),

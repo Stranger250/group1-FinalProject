@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..model.paper import ExamPaperQuestion
-from ..model.question import QuestionStatus, QuestionType
+from ..model.question import Question, QuestionStatus, QuestionType
 from ..repository import question_repo
 from ..schema.question import QuestionCreate
 
@@ -69,6 +69,9 @@ class QuestionService:
             source_article_no=payload.source_article_no,
             status=QuestionStatus.APPROVED,  # 人工录入直接通过
         )
+        from ..utils.audit import write_audit
+        write_audit(db, q, "question_create", target_type="question", target_id=q.id,
+                    detail=f"type={q.type} kp={q.knowledge_point}")
         return _to_dict(q)
 
     @staticmethod
@@ -84,6 +87,9 @@ class QuestionService:
                 fields.get("answer", q.answer),
             )
         q = question_repo.QuestionRepo.update(db, q, **fields)
+        from ..utils.audit import write_audit
+        write_audit(db, q, "question_update", target_type="question", target_id=qid,
+                    detail=f"fields={','.join(sorted(fields))}")
         return _to_dict(q)
 
     @staticmethod
@@ -107,6 +113,9 @@ class QuestionService:
                 detail="题目已被试卷引用，不可删除（请先在试卷中移除该题）",
             )
         question_repo.QuestionRepo.delete(db, q)
+        from ..utils.audit import write_audit
+        write_audit(db, q, "question_delete", target_type="question", target_id=qid,
+                    detail=f"type={q.type} content={str(q.content)[:40]}")
 
     @staticmethod
     def get(db: Session, qid: int) -> dict:
@@ -124,6 +133,51 @@ class QuestionService:
             "total": total,
             "items": [_to_dict(q) for q in items],
         }
+
+    # ---------- Excel 批量导入/导出 ----------
+
+    @staticmethod
+    def export_all(db: Session) -> list[dict]:
+        """导出全部题目（按 id 正序）为 _to_dict 结构列表，供 xlsx 序列化。"""
+        rows = db.scalars(
+            select(Question).order_by(Question.id.asc())
+        ).all()
+        return [_to_dict(q) for q in rows]
+
+    @staticmethod
+    def import_rows(db: Session, items: list[dict], operator_id: int) -> dict:
+        """批量导入题目：行级答案格式校验（全部通过才入库，单事务）。
+
+        返回 {"imported": n, "errors": [{"row","error"}]}；
+        任一行的答案格式不合法（_validate_answers）→ 整批不入库（与 AI 出题先全校验约定一致）。
+        """
+        # 先全校验：答案/选项格式
+        for i, item in enumerate(items, start=2):
+            try:
+                QuestionService._validate_answers(item["type"], item["options"], item["answer"])
+            except HTTPException as exc:
+                return {"imported": 0, "errors": [{"row": i, "error": f"答案校验失败：{exc.detail}"}]}
+        # 单事务批量入库（source=manual、直接 APPROVED，与手工录入一致）
+        rows = [
+            Question(
+                type=item["type"],
+                content=item["content"],
+                options=item["options"],
+                answer=item["answer"],
+                analysis=item["analysis"],
+                knowledge_point=item["knowledge_point"],
+                difficulty=item["difficulty"],
+                source="manual",
+                status=QuestionStatus.APPROVED,
+            )
+            for item in items
+        ]
+        if rows:
+            db.add_all(rows)
+            db.commit()
+            for q in rows:
+                db.refresh(q)
+        return {"imported": len(rows), "errors": []}
 
 
 def _to_dict(q) -> dict:

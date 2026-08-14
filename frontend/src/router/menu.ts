@@ -53,6 +53,8 @@ const MENU: MenuGroup[] = [
     children: [
       { title: '在线考试', path: '/exams', icon: 'Paperclip' },
       { title: '我的记录', path: '/exams/records', icon: 'DataLine' },
+      { title: '考试统计', path: '/exams/stats', icon: 'TrendCharts' },
+      { title: '我的错题', path: '/exams/wrong-book', icon: 'Collection' },
     ],
   },
   {
@@ -60,6 +62,7 @@ const MENU: MenuGroup[] = [
     icon: 'Setting',
     children: [
       { title: '用户管理', path: '/admin/users', icon: 'UserFilled', roles: [ROLE.ADMIN] },
+      { title: '审计日志', path: '/admin/logs', icon: 'Tickets', roles: [ROLE.ADMIN] },
     ],
   },
 ]

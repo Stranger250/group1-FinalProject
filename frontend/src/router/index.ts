@@ -42,6 +42,8 @@ const routes: RouteRecordRaw[] = [
       // 模块三 考试中心（任意登录用户）
       { path: 'exams', name: 'ExamPicker', component: () => import('@/views/exam/ExamPicker.vue'), meta: { title: '在线考试' } },
       { path: 'exams/records', name: 'ExamRecords', component: () => import('@/views/exam/ExamRecords.vue'), meta: { title: '考试记录' } },
+      { path: 'exams/stats', name: 'ExamStats', component: () => import('@/views/exam/ExamStats.vue'), meta: { title: '考试统计' } },
+      { path: 'exams/wrong-book', name: 'WrongBook', component: () => import('@/views/exam/WrongBook.vue'), meta: { title: '我的错题' } },
       { path: 'exams/:recordId', name: 'ExamTaking', component: () => import('@/views/exam/ExamTaking.vue'), meta: { title: '考试作答', hidden: true } },
       { path: 'exams/:recordId/result', name: 'ExamResult', component: () => import('@/views/exam/ExamResult.vue'), meta: { title: '成绩单', hidden: true } },
 
@@ -50,6 +52,7 @@ const routes: RouteRecordRaw[] = [
 
       // 系统管理（仅 ADMIN）
       { path: 'admin/users', name: 'UserManage', component: () => import('@/views/admin/UserManage.vue'), meta: { title: '用户管理', roles: [3] } },
+      { path: 'admin/logs', name: 'AuditLogs', component: () => import('@/views/admin/AuditLogs.vue'), meta: { title: '审计日志', roles: [3] } },
     ],
   },
   {
