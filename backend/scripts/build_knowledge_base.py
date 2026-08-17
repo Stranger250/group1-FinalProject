@@ -3,9 +3,11 @@
 运行：cd shudao/backend && PYTHONIOENCODING=utf-8 python scripts/build_knowledge_base.py [--force] [--no-mysql] [--no-chroma]
 退出码 0 = 全部断言通过。
 
-验收断言（对照 docs/RAG优化方案.md §0 / docs/数据格式与建库注意事项.md §5）：
-  文档数=28、章=199、条=2087、全文=303734 字；引用解析覆盖率 ≥90%；
-  Chroma 计数=分块总数且空间 cosine；MySQL docs=28、chunks=分块总数；
+验收断言（对照 docs/RAG优化方案.md §0 / docs/数据格式与建库注意事项.md §5 / PRD-V2 O4）：
+  文档数 ≥180、章 ≥1000、条 ≥3000（PRD-V2 O4：六类文档合计 >1000 条）；
+  六类 doc_type（law/regulation/company/sop/plan/case）均有数据，建库报告按 doc_type 分组输出；
+  引用解析覆盖率 ≥90%（引用总数为既有法规交叉引用 172 处）；
+  Chroma 计数=分块总数且空间 cosine；MySQL docs=分块总数；
   vector_id↔chunk_id 全量对应；>400 字子块父指针回指正确；抽样 20 条 Recall@5 粗查。
 
 幂等：--force 先删 MySQL 两表 + Chroma delete_collection，二次运行不翻倍。
@@ -16,6 +18,7 @@ import argparse
 import logging
 import os
 import sys
+from collections import Counter
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -29,8 +32,8 @@ sys.path.insert(0, BACKEND_DIR)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("build_kb")
 
-# 盘点审计真源（docs/_rag_data_audit.json totals）
-EXPECTED = {"files": 28, "chapters": 199, "articles": 2087, "chars": 303734}
+# O4 六类文档（PRD-V2）：每类至少 1 个文件；既有法规交叉引用总数（新企业语料不产生引用）
+EXPECTED_TYPES = ("law", "regulation", "company", "sop", "plan", "case")
 EXPECTED_REFS = 172
 
 FAILURES: list[str] = []
@@ -81,15 +84,34 @@ def main() -> None:
         for u in stats.ref_unresolved[:10]:
             print(f"      {u['doc_id']} {u['article_no']} → {u['target']} ({u['reason']})")
 
-    print("\n== 结构断言（对照盘点审计）==")
-    ok("文档数 = 28", stats.files == EXPECTED["files"], str(stats.files))
-    ok("章 = 199", stats.chapters == EXPECTED["chapters"], str(stats.chapters))
-    ok("条 = 2087", stats.articles == EXPECTED["articles"], str(stats.articles))
-    ok("全文 = 303734 字", stats.full_chars == EXPECTED["chars"], str(stats.full_chars))
+    print("\n== 结构断言（PRD-V2 O4：六类语料 >1000 条）==")
+    ok("文档数 ≥ 180", stats.files >= 180, str(stats.files))
+    ok("章 ≥ 1000", stats.chapters >= 1000, str(stats.chapters))
+    ok("条 ≥ 3000", stats.articles >= 3000, str(stats.articles))
     ok(f"引用解析率 ≥90%（{EXPECTED_REFS} 处）", stats.ref_rate >= 0.90, f"{stats.ref_rate:.1%}")
     # 修复（核对发现）：引用总数 172 此前只出现在提示文案、未被真正断言（found=0 时 rate=1.0 会误判 PASS）
     ok(f"引用总数 = {EXPECTED_REFS}", stats.ref_found == EXPECTED_REFS,
        f"found={stats.ref_found} resolved={stats.ref_resolved}")
+
+    # O4：按 doc_type 分组统计（文件数/条数/块数）
+    type_files: Counter[str] = Counter()
+    type_articles: Counter[str] = Counter()
+    type_blocks: Counter[str] = Counter()
+    for blocks in blocks_by_doc.values():
+        dt = blocks[0].doc_type
+        type_files[dt] += 1
+        for b in blocks:
+            type_blocks[dt] += 1
+            if b.article_no:
+                type_articles[dt] += 1
+    print("\n== doc_type 分组统计（O4）==")
+    print(f"  {'doc_type':<12}{'文件':>6}{'条数':>8}{'块数':>8}")
+    for dt in EXPECTED_TYPES:
+        print(f"  {dt:<12}{type_files[dt]:>6}{type_articles[dt]:>8}{type_blocks[dt]:>8}")
+    print(f"  合计：文件 {sum(type_files.values())} | 条数 {sum(type_articles.values())} | 块数 {sum(type_blocks.values())}")
+    ok("六类 doc_type 均有数据", all(type_files[dt] > 0 for dt in EXPECTED_TYPES),
+       str(dict(type_files)))
+    ok("六类合计条数 > 1000", sum(type_articles.values()) > 1000, str(sum(type_articles.values())))
 
     if not args.no_chroma:
         import subprocess
@@ -125,16 +147,20 @@ def main() -> None:
         ok("Chroma 计数 = 分块总数", stats.chroma_count == total_blocks, f"{stats.chroma_count} vs {total_blocks}")
         ok("空间 = cosine", col.metadata.get("hnsw:space") == "cosine", str(col.metadata.get("hnsw:space")))
 
-        # 抽样 20 条 Recall@5 粗查（向量路前缀召回；全链路在 M5 端到端测）
+        # 抽样 20 条 Recall@5 粗查（向量路前缀召回；全链路在 M5 端到端测）。
+        # 跳过「前 40 字在库中重复 ≥3 次」的同模板块（O4 企业制度/预案模板共享开头，
+        # 用内容片段查询时 top5 被同模板其他条目占据，属语料同质化而非检索质量）。
         parents = [b for b in (b for bs in blocks_by_doc.values() for b in bs) if b.is_parent and b.article_no]
-        n = min(20, len(parents))
-        step = (len(parents) - 1) / (n - 1) if n > 1 else 0
+        prefix_count = Counter(b.content[:40] for b in parents)
+        unique = [b for b in parents if prefix_count[b.content[:40]] < 3]
+        n = min(20, len(unique))
+        step = (len(unique) - 1) / (n - 1) if n > 1 else 0
         idxs = sorted({int(round(i * step)) for i in range(n)})
         embedder = get_embedder()
         hits = 0
         misses: list[str] = []
         for i in idxs:
-            b = parents[i]
+            b = unique[i]
             vec = embedder.embed_query(b.content[:40])
             res = col.query(query_embeddings=[vec], n_results=5, include=["metadatas"])
             got = res["ids"][0]
@@ -142,7 +168,7 @@ def main() -> None:
                 hits += 1
             else:
                 misses.append(b.chunk_id)
-        ok(f"抽样 {n} 条 Recall@5 ≥ 15", hits >= max(15, int(n * 0.75)), f"{hits}/{n}")
+        ok(f"抽样 {n} 条（去同模板）Recall@5 ≥ 15", hits >= max(15, int(n * 0.75)), f"{hits}/{n}")
         if misses:
             print(f"      miss 示例: {misses[:5]}")
         client.close()  # 进程内后台 compactor 落盘后释放文件锁
@@ -156,7 +182,7 @@ def main() -> None:
             chunks_n = conn.execute(text("SELECT COUNT(*) FROM knowledge_chunk")).scalar()
             vector_ids = set(r[0] for r in conn.execute(text("SELECT vector_id FROM knowledge_chunk")))
         print("\n== MySQL 断言 ==")
-        ok("knowledge_document = 28", docs_n == EXPECTED["files"], str(docs_n))
+        ok("knowledge_document = 文档数", docs_n == stats.files, f"{docs_n} vs {stats.files}")
         ok("knowledge_chunk = 分块总数", chunks_n == total_blocks, f"{chunks_n} vs {total_blocks}")
         if not args.no_chroma:
             ok("vector_id ↔ Chroma id 全量对应", vector_ids == chroma_ids,

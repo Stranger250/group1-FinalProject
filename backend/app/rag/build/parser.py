@@ -216,6 +216,7 @@ def parse_doc(doc: CleanedDoc, warn_dup: bool = True) -> list[Block]:
             effective_date=doc.effective_date, version=doc.version,
             is_latest=doc.is_latest, source_url=doc.source_url,
             domain_tags=compute_domain_tags(chapter_name),
+            doc_type=doc.doc_type,
         )
         blocks.append(chapter_block)
 
@@ -247,6 +248,7 @@ def parse_doc(doc: CleanedDoc, warn_dup: bool = True) -> list[Block]:
                 status=doc.status, publish_date=doc.publish_date,
                 effective_date=doc.effective_date, version=doc.version,
                 is_latest=doc.is_latest, source_url=doc.source_url,
+                doc_type=doc.doc_type,
             )
             blocks.append(parent)
 
@@ -267,6 +269,7 @@ def parse_doc(doc: CleanedDoc, warn_dup: bool = True) -> list[Block]:
                     child.effective_date = doc.effective_date
                     child.is_latest = doc.is_latest
                     child.source_url = doc.source_url
+                    child.doc_type = doc.doc_type
                     blocks.append(child)
     return blocks
 

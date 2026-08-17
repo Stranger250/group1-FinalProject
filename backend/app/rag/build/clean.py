@@ -5,6 +5,7 @@ title strip、formulation_unit 判空（存而不报错）、parse_error 丢弃�
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 
@@ -84,6 +85,7 @@ class CleanedDoc:
     version: str
     is_latest: bool = True
     chapters: list = field(default_factory=list)  # [{chapter, articles:[{article_no, content}]}]
+    doc_type: str = "法规"  # O4 六类：law/regulation/company/sop/plan/case（缺省「法规」兼容旧语料）
 
 
 def normalize_status(raw: str) -> str:
@@ -100,16 +102,17 @@ def clean_doc(raw: dict, source_filename: str = "") -> CleanedDoc:
     title = (raw.get("title") or "").strip()
     if not title:
         raise ValueError(f"title 为空（文件 {source_filename}）")
-    doc_id = DOC_ID_MAP.get(title)
-    if not doc_id:
-        raise ValueError(f"title 未在 DOC_ID_MAP 中: {title!r}（文件 {source_filename}）")
+    # DOC_ID_MAP 命中用静态映射（既有 28 部）；未命中自动生成确定性 doc_id（O4 新增六类语料）
+    doc_id = DOC_ID_MAP.get(title) or f"d{hashlib.md5(title.encode('utf-8')).hexdigest()[:10]}"
 
     category = (raw.get("category") or "").strip() or "法规"
     doc_level = _CATEGORY_LEVEL.get(category, 3)
-    region = "四川" if doc_id.startswith("sc") else "国家"
+    # region：显式字段 > doc_id 前缀推断 > 国家
+    region = (raw.get("region") or "").strip() or ("四川" if doc_id.startswith("sc") else "国家")
     publish_date = (raw.get("publish_date") or "").strip()
     effective_date = (raw.get("effective_date") or "").strip() or publish_date
     doc_no = (raw.get("doc_no") or "").strip() or "-"
+    doc_type = (raw.get("doc_type") or "").strip() or "法规"
 
     chapters = []
     for ch in raw.get("chapters") or []:
@@ -136,4 +139,5 @@ def clean_doc(raw: dict, source_filename: str = "") -> CleanedDoc:
         status=normalize_status(raw.get("status") or ""),
         version=derive_version(effective_date or publish_date),
         chapters=chapters,
+        doc_type=doc_type,
     )
