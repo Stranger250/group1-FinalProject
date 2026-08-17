@@ -60,6 +60,7 @@ const routes: RouteRecordRaw[] = [
       // 系统管理（仅 ADMIN）
       { path: 'admin/users', name: 'UserManage', component: () => import('@/views/admin/UserManage.vue'), meta: { title: '用户管理', roles: [3] } },
       { path: 'admin/logs', name: 'AuditLogs', component: () => import('@/views/admin/AuditLogs.vue'), meta: { title: '审计日志', roles: [3] } },
+      { path: 'admin/config', name: 'ConfigManage', component: () => import('@/views/admin/ConfigManage.vue'), meta: { title: '系统配置', roles: [2, 3] } },
     ],
   },
   {

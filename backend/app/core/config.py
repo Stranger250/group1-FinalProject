@@ -124,7 +124,60 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # ---- O9 配置存储覆盖：app_config 表（key/value）----
+    # 覆盖项白名单（仅这些字段允许 DB 覆盖；api_key 等敏感字段也走这里，写库不落 git）
+    _OVERRIDE_KEYS = {
+        "base_url", "api_key", "model_name",
+        "vision_base_url", "vision_api_key", "vision_model_name",
+        "rag_vector_top_k", "rag_bm25_top_k", "rag_rrf_k", "rag_fusion_top_k",
+        "rag_rerank_top_n", "rag_conf_refuse", "rag_conf_conservative",
+        "rag_vec_sim_floor", "rag_parent_split_chars", "rag_child_min_chars",
+        "rag_child_max_chars",
+    }
+
+    def apply_db_overrides(self) -> None:
+        """从 app_config 表读覆盖项并应用到当前实例（幂等；表不存在/DB 不可用静默跳过）。
+
+        调用方修改配置后必须 get_settings.cache_clear() 使新值生效
+        （llm_client/rag_config 均实时读取，无需重启）。
+        """
+        import json
+
+        from sqlalchemy.engine import make_url
+
+        try:
+            u = make_url(self.database_url)
+            import pymysql
+            conn = pymysql.connect(
+                host=u.host, port=u.port or 3306, user=u.username,
+                password=u.password or "", database=u.database, charset="utf8mb4",
+            )
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT `key`, `value` FROM app_config")
+                    rows = cur.fetchall()
+            finally:
+                conn.close()
+        except Exception:
+            return  # 表未建 / DB 不可用：用默认值
+
+        for key, value in rows:
+            if key not in self._OVERRIDE_KEYS or value is None or str(value) == "":
+                continue
+            raw = value
+            # JSON 值（形如 "123" / "0.4" / "sk-..."）反序列化，保持原类型
+            try:
+                raw = json.loads(raw)
+            except (TypeError, ValueError):
+                pass
+            try:
+                setattr(self, key, raw)
+            except Exception:  # noqa: BLE001 —— 类型不匹配跳过该键
+                continue
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    s = Settings()
+    s.apply_db_overrides()  # O9：app_config 表覆盖（模型/RAG 策略），失败静默回退默认
+    return s

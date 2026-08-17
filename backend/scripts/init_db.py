@@ -169,6 +169,29 @@ def _backfill_doc_meta(cur) -> None:
         print(f"[OK] knowledge_document 元数据回填 {updated} 行（O10）")
 
 
+def _migrate_app_config(cur, db: str) -> bool:
+    """O9 配置存储迁移（幂等）：建 app_config 表（key/value，O9 模型/RAG 策略覆盖）。
+
+    表不存在则 CREATE；已存在跳过。value 存 JSON 序列化文本（保类型）。
+    """
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.TABLES "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='app_config'",
+        (db,),
+    )
+    if cur.fetchone()[0]:
+        return False
+    cur.execute(
+        "CREATE TABLE app_config ("
+        "  `key` VARCHAR(64) NOT NULL,"
+        "  `value` TEXT NULL,"
+        "  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,"
+        "  PRIMARY KEY (`key`)"
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    )
+    return True
+
+
 def _migrate_question_rewrite(cur, db: str) -> bool:
     """E02 重写增强迁移（幂等）：question 表补齐 rewrite_of / rewrite_feedback / rewrite_pending。
 
@@ -651,6 +674,11 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_knowledge_document_meta(cur, db):
                 print("[OK] knowledge_document 表迁移：O10 文档库元数据列 + crawler_output 回填")
+
+        # 2.13) O9 配置存储迁移（幂等）：建 app_config 表
+        with conn.cursor() as cur:
+            if _migrate_app_config(cur, db):
+                print("[OK] app_config 表创建（O9 模型/RAG 策略配置存储）")
 
         # 3) 初始化角色（幂等）
         with conn.cursor() as cur:

@@ -67,6 +67,7 @@ const MENU: MenuGroup[] = [
     children: [
       { title: '用户管理', path: '/admin/users', icon: 'UserFilled', roles: [ROLE.ADMIN] },
       { title: '审计日志', path: '/admin/logs', icon: 'Tickets', roles: [ROLE.ADMIN] },
+      { title: '系统配置', path: '/admin/config', icon: 'Tools', roles: [ROLE.SAFETY, ROLE.ADMIN] },
     ],
   },
 ]
