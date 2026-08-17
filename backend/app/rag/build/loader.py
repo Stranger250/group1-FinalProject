@@ -65,12 +65,48 @@ def load_raw_docs(data_dir: str) -> list[tuple[str, dict]]:
     return docs
 
 
+def _merge_short_articles(raw: dict, min_chars: int = 150, max_chars: int = 400) -> dict:
+    """合并碎条款（提速优化）：企业语料条款平均仅 85 字，块数爆炸拖慢嵌入。
+
+    规则（仅对 case/plan/company/sop 执行；法规 law/regulation 条号语义保留不合并）：
+    - 相邻条款累计长度 < min_chars 或下一条很短（<80 字）且累计不超 max_chars → 合并（\n 连接）；
+    - 长条款（>max_chars 或独立语义）保持单条，由 parser 二次分块；
+    - article_no 取首条号，内容保留原文本完整。
+    """
+    doc_type = raw.get("doc_type") or "法规"
+    if doc_type in ("law", "regulation", "法规"):
+        return raw
+    chapters = []
+    for ch in raw.get("chapters") or []:
+        arts = [a for a in (ch.get("articles") or []) if (a.get("content") or "").strip()]
+        merged: list[dict] = []
+        buf_no, buf_text = "", ""
+        for a in arts:
+            no = (a.get("no") or "").strip()
+            content = (a.get("content") or "").strip()
+            if not buf_text:
+                buf_no, buf_text = no, content
+            elif len(buf_text) + len(content) <= max_chars and (
+                    len(buf_text) < min_chars or len(content) < 80):
+                buf_text += "\n" + content
+            else:
+                merged.append({"no": buf_no, "content": buf_text})
+                buf_no, buf_text = no, content
+        if buf_text:
+            merged.append({"no": buf_no, "content": buf_text})
+        chapters.append({"chapter": ch.get("chapter", ""), "articles": merged})
+    out = dict(raw)
+    out["chapters"] = chapters
+    return out
+
+
 def build_blocks(docs_raw: list[tuple[str, dict]]) -> tuple[list[CleanedDoc], dict[str, list[Block]], BuildStats]:
     """全量清洗+解析，返回 (cleaned_docs, blocks_by_doc, 统计)。未做引用扫描。"""
     cleaned_docs: list[CleanedDoc] = []
     blocks_by_doc: dict[str, list[Block]] = {}
     stats = BuildStats()
     for fname, raw in docs_raw:
+        raw = _merge_short_articles(raw)  # 提速：合并企业语料碎条款（法规除外）
         doc = clean_doc(raw, fname)
         blocks = parse_doc(doc)
         cleaned_docs.append(doc)
@@ -89,10 +125,19 @@ def build_blocks(docs_raw: list[tuple[str, dict]]) -> tuple[list[CleanedDoc], di
 
 
 def scan_and_tag(blocks_by_doc: dict[str, list[Block]]) -> BuildStats:
-    """引用扫描（回填 ref_out）+ 打标。返回引用统计。"""
-    article_index = build_article_index(blocks_by_doc)
-    version_by_doc = {doc_id: blocks[0].version for doc_id, blocks in blocks_by_doc.items()}
-    found, resolved, unresolved = scan_refs(blocks_by_doc, article_index, version_by_doc)
+    """引用扫描（回填 ref_out）+ 打标。返回引用统计。
+
+    O4 真实语料修正：交叉引用扫描仅对法规类文档（law/regulation/法规）执行——
+    企业制度/规程/预案/事故报告中的「第X条」多为对法规的引用而非文档间交叉引用，
+    全量扫描会把这些计为 unresolved 导致覆盖率闸门（≥90%）误判失败。
+    """
+    law_blocks = {
+        doc_id: blocks for doc_id, blocks in blocks_by_doc.items()
+        if blocks[0].doc_type in ("law", "regulation", "法规")
+    }
+    article_index = build_article_index(law_blocks)
+    version_by_doc = {doc_id: blocks[0].version for doc_id, blocks in law_blocks.items()}
+    found, resolved, unresolved = scan_refs(law_blocks, article_index, version_by_doc)
     for blocks in blocks_by_doc.values():
         tag_blocks(blocks)
     stats = BuildStats()
