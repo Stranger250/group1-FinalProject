@@ -33,6 +33,24 @@ class ExamPaper(Base):
     gen_mode: Mapped[str] = mapped_column(String(8), default=PaperGenMode.MANUAL)
     status: Mapped[str] = mapped_column(String(16), default=PaperStatus.DRAFT)
     creator_id: Mapped[int] = mapped_column(BigInteger)
+    source_paper_id: Mapped[int | None] = mapped_column(BigInteger, index=True)  # O8 收藏副本来源试卷
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class PaperShareStatus:
+    ACTIVE = "ACTIVE"      # 分享中（被分享者可查看/作答/收藏）
+    REVOKED = "REVOKED"    # 已撤销（不可再查看/作答）
+
+
+class PaperShare(Base):
+    """O8 发布考试记录：试卷 → 指定用户（可多用户）。"""
+
+    __tablename__ = "paper_share"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    paper_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    target_user_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default=PaperShareStatus.ACTIVE, index=True)
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

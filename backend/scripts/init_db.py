@@ -338,6 +338,55 @@ def _migrate_hazard_subcategory(cur, db: str) -> bool:
     return True
 
 
+def _migrate_paper_source(cur, db: str) -> bool:
+    """O8 收藏副本迁移（幂等）：exam_paper 表补 source_paper_id 列（非空=收藏副本）。"""
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='exam_paper'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    adds = []
+    if "source_paper_id" not in cols:
+        adds.append("ADD COLUMN source_paper_id BIGINT NULL COMMENT 'O8 收藏副本来源试卷 id'")
+        adds.append("ADD KEY idx_source_paper (source_paper_id)")
+    cur.execute(
+        "SELECT INDEX_NAME FROM information_schema.STATISTICS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='exam_paper' AND INDEX_NAME='idx_creator'",
+        (db,),
+    )
+    if "creator_id" not in cols or cur.fetchone() is None:
+        adds.append("ADD KEY idx_creator (creator_id)")
+    if adds:
+        cur.execute("ALTER TABLE exam_paper " + ", ".join(adds))
+        return True
+    return False
+
+
+def _migrate_paper_share(cur, db: str) -> bool:
+    """O8 发布考试表迁移（幂等）：建 paper_share 表。"""
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.TABLES "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='paper_share'",
+        (db,),
+    )
+    if cur.fetchone()[0] > 0:
+        return False
+    cur.execute(
+        "CREATE TABLE paper_share ("
+        " id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+        " paper_id BIGINT NOT NULL,"
+        " target_user_id BIGINT NOT NULL,"
+        " status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',"
+        " create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+        " KEY idx_paper (paper_id),"
+        " KEY idx_target_user (target_user_id),"
+        " KEY idx_status (status)"
+        ") ENGINE=InnoDB"
+    )
+    return True
+
+
 def _migrate_ai_chat(cur, db: str) -> bool:
     """模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 点赞/点踩）。
 
@@ -491,6 +540,16 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_hazard_subcategory(cur, db):
                 print("[OK] hazard 表迁移：补 subcategory（O1 子类）")
+
+        # 2.714) O8 收藏副本迁移（幂等）：exam_paper 补 source_paper_id 列
+        with conn.cursor() as cur:
+            if _migrate_paper_source(cur, db):
+                print("[OK] exam_paper 表迁移：补 source_paper_id（O8 收藏副本）")
+
+        # 2.715) O8 发布考试表迁移（幂等）：建 paper_share 表
+        with conn.cursor() as cur:
+            if _migrate_paper_share(cur, db):
+                print("[OK] paper_share 表创建（O8 发布考试记录）")
 
         # 2.8) 模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 反馈）
         with conn.cursor() as cur:

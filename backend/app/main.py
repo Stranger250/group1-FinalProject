@@ -23,7 +23,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from .api import ai, auth, chat, exam, exam_running, hazard, log, paper, user
+from .api import ai, auth, chat, exam, exam_running, hazard, log, paper, user, user_paper
 from .core.config import get_settings
 from .rag.embedder import get_embedder
 from .rag.reranker import get_reranker
@@ -98,6 +98,7 @@ app.include_router(exam_running.router)
 app.include_router(chat.router)
 app.include_router(hazard.router)
 app.include_router(hazard.category_router)
+app.include_router(user_paper.router)
 app.include_router(user.router)
 app.include_router(log.router)
 

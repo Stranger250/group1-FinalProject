@@ -53,7 +53,12 @@ class QuestionService:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="解答题参考答案用分号分隔要点，每个要点不能为空")
 
     @staticmethod
-    def create(db: Session, payload: QuestionCreate, operator_id: int) -> dict:
+    def create(db: Session, payload: QuestionCreate, operator_id: int, *, pending: bool = False) -> dict:
+        """手工录入题目。
+
+        O8 权限模型：普通用户提交 → status=PENDING（待管理员审核）；
+        管理员/安全员直接录入 → APPROVED 入库（pending=False）。
+        """
         QuestionService._validate_answers(payload.type, payload.options, payload.answer)
         q = question_repo.QuestionRepo.create(
             db,
@@ -67,11 +72,11 @@ class QuestionService:
             source="manual",
             source_law_title=payload.source_law_title,
             source_article_no=payload.source_article_no,
-            status=QuestionStatus.APPROVED,  # 人工录入直接通过
+            status=QuestionStatus.PENDING if pending else QuestionStatus.APPROVED,
         )
         from ..utils.audit import write_audit
         write_audit(db, q, "question_create", target_type="question", target_id=q.id,
-                    detail=f"type={q.type} kp={q.knowledge_point}")
+                    detail=f"type={q.type} kp={q.knowledge_point} pending={pending}")
         return _to_dict(q)
 
     @staticmethod

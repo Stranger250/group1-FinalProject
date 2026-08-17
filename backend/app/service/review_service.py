@@ -24,9 +24,11 @@ _ACTION_STATUS = {"APPROVE": QuestionStatus.APPROVED, "REJECT": QuestionStatus.R
 class ReviewService:
     @staticmethod
     def _precheck(db: Session, q, payload: ReviewIn, reviewer_id: int) -> dict:
-        """审核预检（不落库）：状态机校验 + 计算落库字段。任一题失败 → 整批不入库（#9）。"""
-        if q.source != QuestionSource.AI:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="仅可审核 AI 生成题目")
+        """审核预检（不落库）：状态机校验 + 计算落库字段。任一题失败 → 整批不入库（#9）。
+
+        O8：放开来源限制——AI 生成（source=ai）与普通用户手工提交（source=manual）均可审核；
+        其余校验（DISABLED 拒审、驳回必填意见、修订版冲突）不变。
+        """
         if q.status == QuestionStatus.DISABLED:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="已停用题目不允许审核")
         # 存在待审/已通过的修订版时禁止直接复核原题通过，避免同一逻辑题重复入卷

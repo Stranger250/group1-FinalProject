@@ -222,7 +222,22 @@ CREATE TABLE IF NOT EXISTS exam_paper (
   gen_mode         VARCHAR(8)   NOT NULL DEFAULT 'manual',
   status           VARCHAR(16)  NOT NULL DEFAULT 'DRAFT',
   creator_id       BIGINT       NOT NULL,
+  source_paper_id  BIGINT       NULL COMMENT 'O8 收藏副本来源试卷 id（非空=收藏副本）',
   create_time      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_status (status),
+  KEY idx_creator (creator_id),
+  KEY idx_source_paper (source_paper_id)
+) ENGINE = InnoDB;
+
+-- O8 发布考试记录（试卷 → 指定用户，可多用户、可撤销）
+CREATE TABLE IF NOT EXISTS paper_share (
+  id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+  paper_id       BIGINT       NOT NULL,
+  target_user_id BIGINT       NOT NULL,
+  status         VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE 分享中 / REVOKED 已撤销',
+  create_time    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_paper (paper_id),
+  KEY idx_target_user (target_user_id),
   KEY idx_status (status)
 ) ENGINE = InnoDB;
 
