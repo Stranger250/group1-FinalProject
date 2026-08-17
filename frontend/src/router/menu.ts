@@ -51,6 +51,7 @@ const MENU: MenuGroup[] = [
     title: '考试中心',
     icon: 'Edit',
     children: [
+      { title: '考试工坊', path: '/exam/workshop', icon: 'Tickets' },
       { title: '在线考试', path: '/exams', icon: 'Paperclip' },
       { title: '我的记录', path: '/exams/records', icon: 'DataLine' },
       { title: '考试统计', path: '/exams/stats', icon: 'TrendCharts' },

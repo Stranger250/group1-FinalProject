@@ -30,6 +30,9 @@ const routes: RouteRecordRaw[] = [
       // 模块二 AI 助手
       { path: 'ai/assistant', name: 'AiAssistant', component: () => import('@/views/ai/AiAssistant.vue'), meta: { title: 'AI 助手' } },
 
+      // O8 用户端考试工坊
+      { path: 'exam/workshop', name: 'ExamWorkshop', component: () => import('@/views/exam/ExamWorkshop.vue'), meta: { title: '考试工坊' } },
+
       // 模块三 考试工坊 · 管理（SAFETY/ADMIN）
       { path: 'exam/questions', name: 'QuestionBank', component: () => import('@/views/exam/QuestionBank.vue'), meta: { title: '题库管理', roles: [2, 3] } },
       { path: 'exam/ai/generate', name: 'AiGenerate', component: () => import('@/views/exam/ai/AiGenerate.vue'), meta: { title: 'AI 出题', roles: [2, 3] } },

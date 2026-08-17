@@ -68,6 +68,11 @@ export function deleteQuestion(qid: number) {
   return request<{ message: string }>({ url: `/questions/${qid}`, method: 'DELETE' })
 }
 
+/** O8 审核用户提交的题目（SAFETY/ADMIN）：APPROVE 通过 / REJECT 驳回（须填意见） */
+export function reviewUserQuestion(qid: number, payload: { action: 'APPROVE' | 'REJECT'; review_note?: string }) {
+  return request<Question>({ url: `/questions/${qid}/review`, method: 'POST', data: payload })
+}
+
 // ---------- E02 AI 出题（SAFETY/ADMIN） ----------
 
 /** AI 生成题目（LLM 调用较慢，放宽超时） */

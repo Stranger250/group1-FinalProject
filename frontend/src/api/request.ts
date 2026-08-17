@@ -87,6 +87,25 @@ export async function uploadRequest<T>(config: AxiosRequestConfig): Promise<ApiR
   return res.data
 }
 
+/** 文件下载（导出 Word/Excel 等）：GET 指定 URL 返回 Blob；错误时回退 JSON 解析并全局提示 */
+export async function downloadRequest(url: string): Promise<Blob> {
+  const res = await instance.request<Blob>({ url, method: 'GET', responseType: 'blob' })
+  const blob = res.data as Blob
+  if (blob.type.includes('application/json')) {
+    try {
+      const text = await blob.text()
+      const body = JSON.parse(text) as ApiResponse<unknown>
+      ElMessage.error(body.message || '下载失败')
+      throw new ApiError(body.code, body.message)
+    } catch (e) {
+      if (e instanceof ApiError) throw e
+      ElMessage.error('下载失败')
+      throw new ApiError(-1, '下载失败')
+    }
+  }
+  return blob
+}
+
 /** 过滤 params 中的空值（undefined/null/''），避免向后端发送多余空参数 */
 export function cleanParams(params: object): Record<string, unknown> {
   const out: Record<string, unknown> = {}

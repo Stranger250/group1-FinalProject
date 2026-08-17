@@ -113,8 +113,13 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
+            <!-- O8：普通用户提交的题目（PENDING）由管理员审核 -->
+            <template v-if="(row.status as QuestionStatus) === 'PENDING'">
+              <el-button link type="success" size="small" @click="handleReview(row as Question, 'APPROVE')">通过</el-button>
+              <el-button link type="danger" size="small" @click="handleReview(row as Question, 'REJECT')">驳回</el-button>
+            </template>
             <el-button link type="primary" size="small" @click="openEdit(row as Question)">编辑</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(row as Question)">删除</el-button>
           </template>
@@ -148,7 +153,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { DIFFICULTIES, QUESTION_STATUSES, QUESTION_TYPES, difficultyMeta, questionStatusMeta, questionTypeLabel } from '@/utils/constants'
-import { deleteQuestion, exportQuestionsUrl, exportTemplateUrl, importQuestions, listQuestions, type QuestionQuery } from '@/api/exam'
+import { deleteQuestion, exportQuestionsUrl, exportTemplateUrl, importQuestions, listQuestions, reviewUserQuestion, type QuestionQuery } from '@/api/exam'
 import type { PageResult } from '@/types/api'
 import type { Question, QuestionDifficulty, QuestionStatus, QuestionType } from '@/types/models/exam'
 import QuestionFormDialog from '@/components/exam/QuestionFormDialog.vue'
@@ -285,6 +290,31 @@ function handleDelete(q: Question): void {
     .catch(() => {
       /* 取消删除 */
     })
+}
+
+/** O8 审核用户提交的题目：通过 APPROVED / 驳回 REJECTED（驳回需填意见） */
+function handleReview(q: Question, action: 'APPROVE' | 'REJECT'): void {
+  if (action === 'REJECT') {
+    ElMessageBox.prompt('请填写驳回意见（提交人可见）', '驳回题目', {
+      type: 'warning',
+      inputType: 'textarea',
+      inputValidator: (v: string) => (v && v.trim() ? true : '驳回必须填写意见'),
+    })
+      .then(async ({ value }) => {
+        await reviewUserQuestion(q.id, { action, review_note: value.trim() })
+        ElMessage.success('已驳回')
+        void load()
+      })
+      .catch(() => {})
+    return
+  }
+  ElMessageBox.confirm(`确认通过题目 #${q.id} 吗？通过后进入题库供组卷。`, '审核通过', { type: 'info' })
+    .then(async () => {
+      await reviewUserQuestion(q.id, { action })
+      ElMessage.success('已通过')
+      void load()
+    })
+    .catch(() => {})
 }
 
 void load()
