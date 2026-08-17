@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import ChatSidebar from '@/components/chat/ChatSidebar.vue'
 import ChatInputBar from '@/components/chat/ChatInputBar.vue'
+import GenDocDialog from '@/components/chat/GenDocDialog.vue'
 import MarkdownRenderer from '@/components/chat/MarkdownRenderer.vue'
 import CitationPanel from '@/components/chat/CitationPanel.vue'
 import ArticleDialog from '@/components/chat/ArticleDialog.vue'
@@ -34,6 +35,9 @@ function onSend(text: string, file?: { text: string; filename: string } | null) 
   void chatStore.sendMessage(text, file ?? null)
 }
 
+// ---------------- O12 生成文档 ----------------
+const genDocVisible = ref(false)
+
 // ---------------- 反馈 ----------------
 function onFeedback(m: UiChatMessage, value: 1 | -1) {
   if (m.id == null) return
@@ -63,6 +67,14 @@ onMounted(() => {
     <ChatSidebar class="sidebar" />
 
     <div class="chat-main">
+      <!-- 工具栏：O12 生成文档 -->
+      <div class="chat-toolbar">
+        <div class="toolbar-title">AI 智能助手</div>
+        <el-button size="small" type="primary" plain @click="genDocVisible = true">
+          <el-icon class="mr-1"><Document /></el-icon>生成文档（Word/PPT）
+        </el-button>
+      </div>
+
       <!-- 欢迎态 -->
       <div v-if="isWelcome" class="welcome">
         <div class="welcome-icon">
@@ -137,6 +149,9 @@ onMounted(() => {
 
     <!-- 查看原文弹窗 -->
     <ArticleDialog v-model="articleVisible" :doc-id="articleDocId" :article-no="articleArticleNo" />
+
+    <!-- O12 生成文档弹窗 -->
+    <GenDocDialog v-model="genDocVisible" />
   </div>
 </template>
 
@@ -158,6 +173,24 @@ onMounted(() => {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 10px;
   overflow: hidden;
+}
+
+/* ---------- 工具栏（O12） ---------- */
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  flex-shrink: 0;
+}
+.toolbar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.mr-1 {
+  margin-right: 4px;
 }
 
 /* ---------- 欢迎态 ---------- */
