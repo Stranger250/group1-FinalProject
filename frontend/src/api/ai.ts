@@ -64,3 +64,23 @@ export function quickQuestions() {
 export function feedback(messageId: number, value: -1 | 0 | 1) {
   return request<{ message: string }>({ url: `/ai/feedback/${messageId}`, method: 'POST', data: { value } })
 }
+
+/** O11 上传文档解析（txt/md/pdf/docx → 纯文本，≤8000 字，不落盘） */
+export interface ChatFileParseResult {
+  filename: string
+  ext: string
+  chars: number
+  truncated: boolean
+  text: string
+}
+
+export function uploadChatFile(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return request<ChatFileParseResult>({
+    url: '/ai/chat/files',
+    method: 'POST',
+    data: form,
+    timeout: 30_000,
+  })
+}

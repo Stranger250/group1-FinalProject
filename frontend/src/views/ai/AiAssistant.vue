@@ -30,8 +30,8 @@ watch(
 )
 
 // ---------------- 发送 / 停止 ----------------
-function onSend(text: string) {
-  void chatStore.sendMessage(text)
+function onSend(text: string, file?: { text: string; filename: string } | null) {
+  void chatStore.sendMessage(text, file ?? null)
 }
 
 // ---------------- 反馈 ----------------
@@ -87,6 +87,9 @@ onMounted(() => {
             <div class="msg-bubble" :class="m.role">
               <!-- 用户消息：纯文本 -->
               <template v-if="m.role === 'user'">
+                <div v-if="m.fileName" class="user-file-tag">
+                  <el-icon :size="13"><Document /></el-icon>{{ m.fileName }}
+                </div>
                 <div class="user-text">{{ m.content }}</div>
                 <div v-if="m.status === 'sending'" class="msg-note">发送中…</div>
                 <div v-if="m.error" class="msg-error">{{ m.error }}</div>
@@ -239,6 +242,20 @@ onMounted(() => {
 .user-text {
   white-space: pre-wrap;
   word-break: break-word;
+}
+.user-file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 2px 10px;
+  background-color: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ai-markdown {
   font-size: 14px;

@@ -11,7 +11,7 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from ..rag.sensitive import contains_sensitive
 from ..schema.chat import ChatIn, ConversationUpdate, FeedbackIn
 from ..service.chat_service import ChatService
 from ..service.qa_service import QaService
+from ..utils.doc_parse import parse_upload
 from ..utils.response import resp
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI 助手"])
@@ -47,7 +48,10 @@ async def chat(
     user_msg_id, history = QaService.persist_user_message(db, conv, payload.message)
 
     async def gen():
-        async for line in QaService.stream_qa(db, conv, user_msg_id, payload.message, history):
+        async for line in QaService.stream_qa(
+            db, conv, user_msg_id, payload.message, history,
+            file_context=payload.file_context,
+        ):
             yield line
 
     return StreamingResponse(
@@ -55,6 +59,24 @@ async def chat(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/chat/files", summary="O11 上传文档解析（txt/md/pdf/docx → 纯文本）")
+def upload_chat_file(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    """解析上传文档为纯文本，供「根据文档 X 回答」场景使用。
+
+    - 白名单 + 魔数校验 + ≤10MB；解析文本截断 8000 字；
+    - 敏感词预检（命中 400，与问答入口同口径）；
+    - 不落盘：仅返回解析文本，由前端随消息携带 file_context 发送。
+    """
+    parsed = parse_upload(file)
+    hits = contains_sensitive(parsed["text"])
+    if hits:
+        raise HTTPException(status_code=400, detail=f"文档内容包含敏感词：{'、'.join(hits)}")
+    return resp(parsed)
 
 
 @router.post("/conversations", summary="新建会话（A02）")

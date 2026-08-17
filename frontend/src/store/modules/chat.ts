@@ -52,6 +52,8 @@ export interface UiChatMessage {
   feedback: -1 | 0 | 1
   createTime: string | null
   error: string | null
+  /** O11 用户消息携带的上传文档名（历史消息无 → null） */
+  fileName?: string | null
 }
 
 /** 归一化 SSE meta/done citations（unknown[] → ChatCitation[]，脏数据丢弃） */
@@ -182,7 +184,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // ---------------- 消息流式 ----------------
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, fileContext?: { text: string; filename: string } | null) {
     const content = text.trim()
     if (!content || streaming.value) return
 
@@ -199,6 +201,7 @@ export const useChatStore = defineStore('chat', () => {
       feedback: 0,
       createTime: null,
       error: null,
+      fileName: fileContext?.filename ?? null,
     }
     const assistantMsg: UiChatMessage = {
       id: null,
@@ -274,7 +277,11 @@ export const useChatStore = defineStore('chat', () => {
     try {
       await chatSSE(
         '/api/v1/ai/chat',
-        { conversation_id: currentId.value, message: content },
+        {
+          conversation_id: currentId.value,
+          message: content,
+          ...(fileContext ? { file_context: fileContext.text } : {}),
+        },
         { onMeta, onDelta, onDone, onError },
         abort.signal,
       )
