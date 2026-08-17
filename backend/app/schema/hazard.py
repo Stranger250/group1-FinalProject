@@ -20,7 +20,8 @@ class HazardCreate(BaseModel):
     必填：description（描述）、level（等级）——对齐 PRD H01 验收「必填项校验（描述、等级）」。
     title 缺省自动取 description 前 20 字；location 缺省落「未填写」（DDL NOT NULL 约束）；
     type 缺省「其他」；images 是已上传图片的 URL 列表（先调 POST /upload 拿 url 再随表单提交）。
-    risk_report 为可选的 AI 识别结果（前端调用 /analyze 得到后回传，落 hazard.risk_report）。
+    reporter_name 为现场上报人姓名（缺省取当前登录用户姓名，前端可填他人代报）。
+    risk_report 为 AI 识别结果（前端勾选保留后回传；kept=false 表示未保留识别，详情仅原图）。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -30,6 +31,7 @@ class HazardCreate(BaseModel):
     location: str | None = Field(default=None, max_length=128)
     level: HazardLevelLiteral
     type: str = Field(default="其他", max_length=32)
+    reporter_name: str | None = Field(default=None, max_length=64)  # 现场上报人（缺省=当前用户姓名）
     images: list[str] = Field(default_factory=list, max_length=9)  # 单隐患最多 9 张
     risk_report: dict | None = None
 

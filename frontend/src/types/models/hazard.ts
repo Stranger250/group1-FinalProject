@@ -51,6 +51,7 @@ export interface HazardItem {
   status: HazardStatus
   creator_id: number
   creator_name: string
+  reporter_name: string
   image_count: number
   create_time: string | null
   update_time: string | null
@@ -68,6 +69,7 @@ export interface HazardDetail {
   status: HazardStatus
   creator_id: number
   creator_name: string
+  reporter_name: string
   handler_id: number | null
   deadline: string | null
   rectification_measure: string | null
@@ -87,6 +89,7 @@ export interface HazardCreatePayload {
   location?: string
   level: HazardLevel
   type?: string
+  reporter_name?: string
   images: string[]
   risk_report?: Record<string, unknown> | null
 }

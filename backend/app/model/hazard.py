@@ -73,6 +73,7 @@ class Hazard(Base):
         server_default=text("'WAIT_PROCESS'"), index=True, nullable=False,
     )
     creator_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)  # 上报人 → user.id
+    reporter_name: Mapped[str | None] = mapped_column(String(64))  # 现场上报人姓名（缺省=登录用户姓名，可代报）
     handler_id: Mapped[int | None] = mapped_column(BigInteger, index=True)  # 整改负责人（H04 预留）
     deadline: Mapped[datetime | None] = mapped_column(DateTime)  # 整改期限（H04 预留）
     rectification_measure: Mapped[str | None] = mapped_column(Text)  # 整改措施（H05 预留）

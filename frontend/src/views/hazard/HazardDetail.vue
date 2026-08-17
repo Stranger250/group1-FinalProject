@@ -75,6 +75,7 @@
               <el-descriptions-item label="类型">{{ detail.type }}</el-descriptions-item>
               <el-descriptions-item label="位置">{{ detail.location || '未填写' }}</el-descriptions-item>
               <el-descriptions-item label="上报人">{{ detail.creator_name }}</el-descriptions-item>
+              <el-descriptions-item label="现场上报人">{{ detail.reporter_name || detail.creator_name }}</el-descriptions-item>
               <el-descriptions-item label="上报时间">{{ formatDateTime(detail.create_time) }}</el-descriptions-item>
               <el-descriptions-item label="更新时间">{{ formatDateTime(detail.update_time) }}</el-descriptions-item>
               <el-descriptions-item label="处理期限" :span="2">{{ formatDateTime(detail.deadline) }}</el-descriptions-item>

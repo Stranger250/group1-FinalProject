@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS hazard (
   type                  VARCHAR(32)  NOT NULL,
   status                VARCHAR(16)  NOT NULL DEFAULT 'WAIT_PROCESS',
   creator_id            BIGINT       NOT NULL,
+  reporter_name         VARCHAR(64)  NULL COMMENT '现场上报人姓名（缺省=登录用户姓名，可代报）',
   handler_id            BIGINT       NULL,
   deadline              DATETIME     NULL,
   rectification_measure TEXT         NULL,

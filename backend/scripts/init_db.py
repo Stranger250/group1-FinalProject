@@ -231,6 +231,20 @@ def _migrate_subjective_answer(cur, db: str) -> bool:
     return migrated
 
 
+def _migrate_hazard_reporter(cur, db: str) -> bool:
+    """隐患上报人迁移（幂等）：hazard 表补 reporter_name 列（现场上报人姓名，可代报）。"""
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='hazard'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    if "reporter_name" not in cols:
+        cur.execute("ALTER TABLE hazard ADD COLUMN reporter_name VARCHAR(64) NULL COMMENT '现场上报人姓名'")
+        return True
+    return False
+
+
 def _migrate_ai_chat(cur, db: str) -> bool:
     """模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 点赞/点踩）。
 
@@ -369,6 +383,11 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_subjective_answer(cur, db):
                 print("[OK] question/exam_answer 表迁移：answer 列扩为 TEXT（解答题支持）")
+
+        # 2.711) 隐患上报人迁移（幂等）：hazard 表补 reporter_name 列
+        with conn.cursor() as cur:
+            if _migrate_hazard_reporter(cur, db):
+                print("[OK] hazard 表迁移：补 reporter_name（现场上报人）")
 
         # 2.8) 模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 反馈）
         with conn.cursor() as cur:

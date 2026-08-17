@@ -54,6 +54,8 @@ class HazardService:
         location = (payload.location or "").strip() or "未填写"
         hazard_type = (payload.type or "").strip() or "其他"
         description = payload.description.strip()
+        # 现场上报人：可代报（填他人姓名）；缺省取当前登录用户姓名
+        reporter_name = (payload.reporter_name or "").strip() or user.name
 
         # hazard_no 唯一键并发冲突 → 回滚重试（当日序号 +1）
         prefix = f"{settings.hazard_no_prefix}{_now().strftime('%Y%m%d')}"
@@ -66,7 +68,8 @@ class HazardService:
                     title=title, description=description, location=location,
                     level=payload.level, type=hazard_type,
                     status=HazardStatus.WAIT_PROCESS,
-                    creator_id=user.id, risk_report=payload.risk_report,
+                    creator_id=user.id, reporter_name=reporter_name,
+                    risk_report=payload.risk_report,
                 )
                 HazardRepo.add_images(db, h.id, payload.images, user.id, commit=False)
                 HazardRepo.add_log(
@@ -294,6 +297,7 @@ class HazardService:
             "status": h.status,
             "creator_id": h.creator_id,
             "creator_name": names.get(h.creator_id, ""),
+            "reporter_name": h.reporter_name or names.get(h.creator_id, ""),  # 现场上报人（兼容旧数据）
             # H04–H06 处理链路字段
             "handler_id": h.handler_id,
             "handler_name": names.get(h.handler_id or 0, ""),
@@ -336,6 +340,7 @@ class HazardService:
             "status": h.status,
             "creator_id": h.creator_id,
             "creator_name": names.get(h.creator_id, ""),
+            "reporter_name": h.reporter_name or names.get(h.creator_id, ""),  # 现场上报人（兼容旧数据）
             "image_count": counts.get(h.id, 0),
             "create_time": h.create_time.isoformat() if h.create_time else None,
             "update_time": h.update_time.isoformat() if h.update_time else None,

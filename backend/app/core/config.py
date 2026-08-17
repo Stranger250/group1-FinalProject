@@ -102,6 +102,10 @@ class Settings(BaseSettings):
     rag_llm_max_tokens: int = 800       # 全量模式回答 max_tokens
     rag_llm_conservative_tokens: int = 300  # 保守模式回答 max_tokens（收紧，防过度发挥）
     rag_stream_ping_sec: float = 60.0   # SSE 保活阈值：LLM 静默超过该秒数发 ping
+    # 流式节奏（M3）：LLM 生成快时 delta 会瞬时喷出（实测 237 块 ~2s 全达），
+    # 前端感知「一次性出全文」而非流式。min_delta_interval 限制相邻 delta 最小间隔（秒），
+    # 让输出以可感知速度流动（仍为真实流式，仅平滑节奏）。0=不限速（原始行为）。
+    rag_stream_min_delta_interval: float = 0.03
 
     model_config = SettingsConfigDict(
         env_file=(ENV_FILE,),

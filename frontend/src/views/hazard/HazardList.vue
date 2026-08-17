@@ -82,6 +82,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="creator_name" label="上报人" width="110" show-overflow-tooltip />
+        <el-table-column prop="reporter_name" label="现场上报人" width="120" show-overflow-tooltip />
         <el-table-column prop="image_count" label="图片" width="80" align="center">
           <template #default="{ row }">
             <span class="img-count">

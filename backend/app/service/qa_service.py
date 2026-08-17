@@ -27,6 +27,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from decimal import Decimal
 from typing import Any, AsyncIterator
 
@@ -176,11 +177,14 @@ class QaService:
 
             parts: list[str] = []
             ping_sec = settings.rag_stream_ping_sec
+            # 流式节奏：LLM 瞬时喷出时平滑 delta 间隔，前端可感知逐字输出（0=不限制）
+            min_interval = settings.rag_stream_min_delta_interval
             try:
                 async with _LLM_SEMAPHORE:
                     stream = chat_stream(
                         system, user_prompt, temperature=0.1, max_tokens=max_tokens
                     )
+                    _last_sent = 0.0
                     while True:
                         try:
                             # 单块等待加超时：LLM 静默超过 ping 阈值时先发 ping 保活（RAG 契约 §0.2/§3.7）
@@ -196,7 +200,13 @@ class QaService:
                             yield _sse("delta", {"text": "［内容已屏蔽］"})
                             logger.warning("输出敏感词拦截：%s", "、".join(hits))
                             break
+                        # 平滑节奏：距上一块不足 min_interval 则补齐等待（首块立即发）
+                        now = time.monotonic()
+                        wait = _last_sent + min_interval - now
+                        if min_interval > 0 and wait > 0:
+                            await asyncio.sleep(wait)
                         yield _sse("delta", {"text": delta})
+                        _last_sent = time.monotonic()
                         parts.append(delta)
             except (GeneratorExit, asyncio.CancelledError):
                 # 客户端断连：best-effort 落 INTERRUPTED 部分文本，再关闭

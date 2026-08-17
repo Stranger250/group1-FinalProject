@@ -229,16 +229,18 @@ export const useChatStore = defineStore('chat', () => {
 
     const onDelta = (delta: { text: string }) => {
       pendingText += delta.text
+      // 节流渲染：用 setTimeout 而非 requestAnimationFrame——
+      // rAF 在页面不可见（后台标签页/无头浏览器）时暂停，会导致流式渲染冻结
       if (!rafId) {
-        rafId = requestAnimationFrame(() => {
+        rafId = window.setTimeout(() => {
           rafId = 0
           flushText()
-        })
+        }, 16)
       }
     }
 
     const onDone = (done: ChatSSEDone) => {
-      if (rafId) cancelAnimationFrame(rafId)
+      if (rafId) clearTimeout(rafId)
       rafId = 0
       flushText()
       assistantMsg.id = done.answer_id
@@ -254,7 +256,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     const onError = (errMsg: string) => {
-      if (rafId) cancelAnimationFrame(rafId)
+      if (rafId) clearTimeout(rafId)
       rafId = 0
       flushText()
       assistantMsg.status = 'error'
@@ -274,7 +276,7 @@ export const useChatStore = defineStore('chat', () => {
         abort.signal,
       )
     } finally {
-      if (rafId) cancelAnimationFrame(rafId)
+      if (rafId) clearTimeout(rafId)
       streaming.value = false
       abort = null
       // 兜底：流正常结束但未收到 done（如服务器提前关闭）→ 有内容按成功，空按失败

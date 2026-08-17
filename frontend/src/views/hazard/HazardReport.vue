@@ -50,6 +50,10 @@
           <el-input v-model="form.location" maxlength="128" placeholder="如：3 号塔吊东侧基坑、二期综合楼 5 层（可选）" />
         </el-form-item>
 
+        <el-form-item label="现场上报人" prop="reporter_name">
+          <el-input v-model="form.reporter_name" maxlength="64" placeholder="默认当前登录用户，可填现场实际上报人" />
+        </el-form-item>
+
         <el-form-item label="隐患类型" prop="type">
           <el-select
             v-model="form.type"
@@ -91,6 +95,7 @@ import type { AnalyzeResult, HazardCreatePayload, HazardLevel } from '@/types/mo
 import { HAZARD_LEVELS, HAZARD_TYPES, hazardLevelMeta } from '@/utils/constants'
 import { percent } from '@/utils/format'
 import { useHazardStore } from '@/store/hazard'
+import { useUserStore } from '@/store/user'
 import HazardImageUpload from '@/components/hazard/HazardImageUpload.vue'
 
 const router = useRouter()
@@ -103,8 +108,13 @@ const form = reactive({
   location: '',
   level: '' as HazardLevel | '',
   type: '',
+  reporter_name: '',
   images: [] as string[],
 })
+
+// 默认现场上报人 = 当前登录用户姓名（可改，支持代报）
+const userStore = useUserStore()
+if (userStore.user?.name) form.reporter_name = userStore.user.name
 
 /** 「AI 分析」页带回的识别结果（回填表单 + 随上报落 risk_report） */
 const analysis = ref<AnalyzeResult | null>(null)
@@ -153,6 +163,7 @@ async function onSubmit() {
       location: form.location.trim() || undefined,
       level: form.level as HazardLevel,
       type: form.type || undefined,
+      reporter_name: form.reporter_name.trim() || undefined,
       images: form.images,
       risk_report: analysis.value ? { ...analysis.value } : null,
     }
@@ -172,6 +183,7 @@ function resetAll() {
   form.location = ''
   form.level = ''
   form.type = ''
+  form.reporter_name = userStore.user?.name ?? ''
   form.images = []
   analysis.value = null
   formRef.value?.clearValidate()
