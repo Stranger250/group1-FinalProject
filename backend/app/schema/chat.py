@@ -22,6 +22,8 @@ class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     # 保留 mode 扩展位（如 strict/precise），MVP 恒 None（走默认检索链路）
     mode: str | None = Field(default=None, max_length=16)
+    # O11 文件上传：解析后的文档文本（会话级临时上下文，≤8000 字，仅当前会话）
+    file_context: str | None = Field(default=None, max_length=8000)
 
 
 class ConversationUpdate(BaseModel):

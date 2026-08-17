@@ -295,13 +295,16 @@ def build_qa_prompt(
     *,
     max_tokens: int = 800,
     conservative_tokens: int = 300,
+    file_context: str | None = None,
 ) -> tuple[str, str, int]:
     """构造问答 Prompt（A01 RAG 智能问答），返回 (system, user, max_tokens)。
 
     - blocks：检索返回的父块列表（RetrievedBlock，含 title/article_no/content）；
     - history：历史 user 问句（时间正序，最近的几轮）；
     - query：当前用户问题（原文，非改写串——改写只用于检索）；
-    - mode：full/conservative——conservative 收紧 max_tokens（防过度发挥）。
+    - mode：full/conservative——conservative 收紧 max_tokens（防过度发挥）；
+    - file_context（O11）：用户上传文档解析文本，作为「用户文档」附加材料，
+      优先于检索资料被引用（满足「根据我上传的文档回答」），不进知识库。
     system 五条硬约束：只依据资料、事实逐字出处标 [n]、禁库外编造、数值/条号原样复述、
     资料不足如实说明。引用脚注 [n] 由后端 grounding 校验（越界删除，缺失置 0）。
     """
@@ -329,10 +332,18 @@ def build_qa_prompt(
         "4. 若用户问的是与安全生产无关的寒暄，可简短礼貌回应；"
         "若是模糊或非法的问题，先说明无法回答。\n"
         "5. 用简体中文回答，结构清晰、条理分明，直接给出结论再解释依据。\n"
+        "6. 若【用户上传文档】非空：用户问题优先依据上传文档内容回答"
+        "（文档优先于检索资料），仍按第 3 条标注引用。\n"
         f"{mode_rule}"
     )
 
-    user = f"【参考资料】\n{refs}\n\n{history_text}【问题】\n{query}\n\n请依据【参考资料】回答上述问题，引用出处时标注 [n]。"
+    file_block = (
+        f"\n\n【用户上传文档】\n{file_context}\n" if file_context and file_context.strip() else ""
+    )
+    user = (
+        f"【参考资料】\n{refs}{file_block}\n\n{history_text}【问题】\n{query}\n\n"
+        "请依据【参考资料】（及【用户上传文档】）回答上述问题，引用出处时标注 [n]。"
+    )
     return system, user, limit
 
 

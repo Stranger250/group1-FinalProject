@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     # 让输出以可感知速度流动（仍为真实流式，仅平滑节奏）。0=不限速（原始行为）。
     rag_stream_min_delta_interval: float = 0.03
 
+    # ===== B2 日志上报（OA 对接预留）=====
+    # 当前为空：POST /logs/report 仅返回报文；配置后由未来 OA 对接方消费（本期不实现推送）
+    oa_report_url: str = ""
+
     model_config = SettingsConfigDict(
         env_file=(ENV_FILE,),
         env_file_encoding="utf-8",

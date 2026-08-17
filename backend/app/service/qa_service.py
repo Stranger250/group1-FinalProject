@@ -119,8 +119,12 @@ class QaService:
 
     @staticmethod
     async def stream_qa(db, conv, user_msg_id: int, message: str,
-                        history: list[str]) -> AsyncIterator[str]:
-        """编排一次问答，逐条 yield SSE 文本行（meta → delta* → done）。"""
+                        history: list[str], file_context: str | None = None) -> AsyncIterator[str]:
+        """编排一次问答，逐条 yield SSE 文本行（meta → delta* → done）。
+
+        O11：file_context 为上传文档解析文本（会话级临时上下文），注入 prompt 供 LLM 引用，
+        不写入知识库、不参与检索（仅作为补充材料）。
+        """
         settings = get_settings()
         retriever = get_retriever()
 
@@ -173,6 +177,7 @@ class QaService:
                 blocks, history, message, result.mode,
                 max_tokens=settings.rag_llm_max_tokens,
                 conservative_tokens=settings.rag_llm_conservative_tokens,
+                file_context=file_context,
             )
 
             parts: list[str] = []
