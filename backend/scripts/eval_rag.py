@@ -83,11 +83,30 @@ def _log2(x: float) -> float:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="O6 RAG 评测（RAG v1.0 基线）")
+    ap = argparse.ArgumentParser(description="O6 RAG 评测（单变量优化实验框架）")
     ap.add_argument("--queries", default=str(BACKEND_DIR / "data" / "eval" / "queries_v1.json"))
     ap.add_argument("--top-k", type=int, default=5)
     ap.add_argument("--save", default=str(BACKEND_DIR / "data" / "eval" / "baseline_v1.json"))
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="单变量覆盖 settings（如 --set rag_rrf_k=40），实验用不改代码")
+    ap.add_argument("--tag", default="", help="实验标签，写入存档备注")
     args = ap.parse_args()
+
+    # 单变量覆盖（仅本次进程生效；retriever 单例在覆盖后构建）
+    from app.core.config import get_settings as _gs
+    _s = _gs()
+    for kv in args.set:
+        key, _, value = kv.partition("=")
+        if not hasattr(_s, key):
+            print(f"!! 未知配置键: {key}")
+            return 2
+        try:
+            cur = getattr(_s, key)
+            setattr(_s, key, type(cur)(value))
+        except (TypeError, ValueError):
+            setattr(_s, key, value)
+        print(f"[实验覆盖] {key} = {getattr(_s, key)}")
+    _gs.cache_clear()
 
     with open(args.queries, encoding="utf-8") as f:
         data = json.load(f)
@@ -136,7 +155,9 @@ def main() -> int:
     baseline = {
         "version": "baseline_v1",
         "rag_version": "v1.0",
+        "tag": args.tag or "baseline",
         "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "overrides": dict(kv.split("=", 1) for kv in args.set),
         "queries_file": os.path.basename(args.queries),
         "top_k": top_k,
         "config": {
