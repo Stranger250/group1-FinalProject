@@ -45,6 +45,9 @@ pdfplumber
 pdfminer.six
 python-docx
 
+# ===== O12 文档生成（Word/PPT 本地渲染）=====
+python-pptx
+
 # ===== 图像处理（视觉识别 / 标注图）=====
 Pillow
 
