@@ -1,49 +1,25 @@
-# 蜀道安全助手 docker-compose（开发/演示编排）
-# 用法：docker compose -f backend/docker-compose.yml up -d
-# 说明：
-#   - MySQL（业务数据）与 Redis（预留，当前代码未使用，仍起容器便于后续启用）；
-#   - 后端容器挂载本地模型目录（D:/code/2026/7_8月实训/bge-*）与知识库目录，
-#     避免在镜像内重复下载模型（模型体积大且按实训机绝对路径配置）；
-#   - 前端以 Vite 构建产物经 nginx 托管，反向代理 /api、/uploads 到后端。
-# 注意：本文件为部署编排新增项，不改变现有 uvicorn/vite 本地运行方式。
+# 蜀道安全助手 docker-compose（本机部署编排）
+# 用法：docker compose -f backend/docker-compose.yml up -d --build
+# 说明（本机适配版）：
+#   - MySQL / Redis 复用宿主机实例（本机 3306/6379 已有服务与数据），不再起容器，避免端口冲突；
+#   - 后端容器经 host.docker.internal 连宿主 MySQL/Redis；LLM/视觉凭据从 backend/.env 自动注入
+#     （compose 默认读取同目录 .env）；
+#   - 模型目录（bge-*）与知识库（chroma_kb）、上传目录以卷挂载，镜像内不打包；
+#   - 后端映射宿主 8002（避开本机 8000 的本地 uvicorn）；前端 nginx 映射 8080。
+#   - 部署后访问 http://localhost:8080
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: shudao-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
-      MYSQL_DATABASE: shudao
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  redis:
-    image: redis:7-alpine
-    container_name: shudao-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-
   backend:
     build:
       context: ..
       dockerfile: backend/Dockerfile
     container_name: shudao-backend
     environment:
-      DATABASE_URL: mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-123456}@mysql:3306/shudao?charset=utf8mb4
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-123456}@host.docker.internal:3306/shudao?charset=utf8mb4
+      REDIS_URL: redis://host.docker.internal:6379/0
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-please-random-64-char}
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123456}
-      # LLM / 视觉凭据：从宿主机 backend/.env 或环境注入
+      # LLM / 视觉凭据：自动读取 backend/.env（compose 同目录 .env）
       BASE_URL: ${BASE_URL:-}
       API_KEY: ${API_KEY:-}
       MODEL_NAME: ${MODEL_NAME:-}
@@ -60,10 +36,9 @@ services:
       - ./data/uploads:/data/uploads
       - ${MODEL_DIR:-D:/code/2026/7_8月实训}:/models:ro
     ports:
-      - "8000:8000"
-    depends_on:
-      mysql:
-        condition: service_healthy
+      - "8002:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     image: nginx:1.27-alpine
@@ -75,7 +50,3 @@ services:
       - "8080:80"
     depends_on:
       - backend
-
-volumes:
-  mysql-data:
-  redis-data:

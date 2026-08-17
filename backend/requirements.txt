@@ -1,14 +1,14 @@
-# 蜀道安全助手 backend 运行时依赖
-# 说明：RAG/AI 依赖（langchain/bge/chroma/jieba 等）复用仓库根 requirements.txt 已装环境，此处只列 Web 后端所需。
+# 蜀道安全助手 backend 运行时依赖（容器可独立安装的完整清单）
 # 安装：cd shudao/backend && pip install -r requirements.txt
+# 说明：本文件同时服务于「本地复用根环境」与「Docker 全新环境」两种部署；
+#       容器构建（Dockerfile）以本文件为准，故 RAG/AI 依赖一并显式列出。
 
-# ===== E02 AI 出题（OpenAI 兼容协议客户端；jieba/rank_bm25 复用根环境已装）=====
+# ===== AI 客户端 / LLM（OpenAI 兼容协议）=====
 openai>=1
+httpx
 
-# ===== Web 框架（fastapi 缺失，需安装）=====
+# ===== Web 框架与服务器 =====
 fastapi>=0.115
-
-# ===== ASGI 服务器（已装，列出保持完整）=====
 uvicorn[standard]
 
 # ===== ORM 与数据库 =====
@@ -16,7 +16,7 @@ sqlalchemy>=2.0
 pymysql
 cryptography            # MySQL8 caching_sha2_password 认证依赖
 
-# ===== 缓存（redis 缺失，需安装；E04 考试会话用）=====
+# ===== 缓存 =====
 redis>=5
 
 # ===== 鉴权 =====
@@ -28,3 +28,25 @@ email-validator
 # ===== 配置 =====
 pydantic-settings
 python-dotenv
+
+# ===== RAG：嵌入 / 向量库 / 检索 =====
+sentence-transformers
+transformers
+chromadb
+rank-bm25
+jieba
+numpy
+
+# ===== RAG：本地模型加载（langchain 仅作 Embedding 包装）=====
+langchain-huggingface
+
+# ===== 文档解析（E02 参考文档 / 知识库）=====
+pdfplumber
+pdfminer.six
+python-docx
+
+# ===== 图像处理（视觉识别 / 标注图）=====
+Pillow
+
+# ===== Excel 题目批量导入导出 =====
+openpyxl
