@@ -20,8 +20,20 @@
           </el-select>
         </el-form-item>
         <el-form-item label="类型">
-          <el-select v-model="filters.type" placeholder="全部类型" clearable style="width: 150px" @change="onSearch">
+          <el-select v-model="filters.type" placeholder="全部类型" clearable style="width: 140px" @change="onTypeFilterChange">
             <el-option v-for="t in HAZARD_TYPES" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="子类">
+          <el-select
+            v-model="filters.subcategory"
+            placeholder="全部子类"
+            clearable
+            style="width: 150px"
+            :disabled="!filters.type"
+            @change="onSearch"
+          >
+            <el-option v-for="s in subcategoryOptions" :key="s.name" :label="s.name" :value="s.name" />
           </el-select>
         </el-form-item>
         <el-form-item label="关键字">
@@ -129,10 +141,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { listHazards } from '@/api/hazard'
-import type { HazardItem, HazardLevel, HazardSort, HazardStatus, SortOrder } from '@/types/models/hazard'
+import type { HazardCategoryNode, HazardItem, HazardLevel, HazardSort, HazardStatus, SortOrder } from '@/types/models/hazard'
 import { HAZARD_LEVELS, HAZARD_STATUSES, HAZARD_TYPES, hazardLevelMeta, hazardStatusMeta } from '@/utils/constants'
 import { formatDateTime } from '@/utils/format'
 
@@ -143,10 +155,29 @@ const filters = reactive<{
   status: HazardStatus | ''
   level: HazardLevel | ''
   type: string
+  subcategory: string
   keyword: string
-}>({ status: '', level: '', type: '', keyword: '' })
+}>({ status: '', level: '', type: '', subcategory: '', keyword: '' })
 
 const dateRange = ref<[string, string] | null>(null)
+
+// O1 分类树（子类联动）
+const categoryRoots = ref<HazardCategoryNode[]>([])
+const subcategoryOptions = computed(() => categoryRoots.value.find((r) => r.name === filters.type)?.children ?? [])
+
+async function loadCategories() {
+  try {
+    const { listHazardCategories } = await import('@/api/hazard')
+    categoryRoots.value = (await listHazardCategories()).items
+  } catch {
+    categoryRoots.value = []
+  }
+}
+
+function onTypeFilterChange() {
+  filters.subcategory = ''
+  onSearch()
+}
 
 // ---------- 分页 ----------
 const page = ref(1)
@@ -186,6 +217,7 @@ function onReset() {
   filters.status = ''
   filters.level = ''
   filters.type = ''
+  filters.subcategory = ''
   filters.keyword = ''
   dateRange.value = null
   sortState.prop = 'create_time'
@@ -220,6 +252,7 @@ async function load() {
       status: filters.status,
       level: filters.level,
       type: filters.type,
+      subcategory: filters.subcategory,
       keyword: filters.keyword.trim(),
       start_time: start ? `${start} 00:00:00` : '',
       end_time: end ? `${end} 23:59:59` : '',
@@ -241,7 +274,10 @@ function goDetail(row: HazardItem) {
   router.push(`/hazards/${row.id}`)
 }
 
-onMounted(load)
+onMounted(() => {
+  loadCategories()
+  load()
+})
 </script>
 
 <style scoped>

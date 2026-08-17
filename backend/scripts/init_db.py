@@ -28,6 +28,58 @@ ROLES = [
     (3, "ADMIN", "系统管理员", "用户权限/系统配置"),
 ]
 
+# O1 隐患分类种子：(大类编码, 大类名, [(排序, 子类编码, 子类名, 检查项说明), ...])
+_HAZARD_CATEGORIES = [
+    ("ga", "高处作业", [
+        (1, "01", "临边作业", "临边防护栏杆、安全网完好；作业系挂安全带"),
+        (2, "02", "洞口作业", "洞口盖板/防护栏杆；警示标志"),
+        (3, "03", "攀登作业", "梯具完好防滑；禁止攀爬脚手架"),
+        (4, "04", "悬空作业", "作业平台稳固；安全带高挂低用"),
+        (5, "05", "交叉作业", "上下隔离防护；禁止抛掷"),
+        (6, "06", "操作平台", "平台满铺、护栏齐全；荷载不超限"),
+    ]),
+    ("dq", "用电安全", [
+        (1, "01", "配电箱/柜", "一机一闸一漏一箱；箱门关闭上锁"),
+        (2, "02", "电缆线路", "绝缘完好；架空/埋地敷设；无拖地泡水"),
+        (3, "03", "电动工具", "漏电保护；绝缘良好；禁止私拉乱接"),
+        (4, "04", "接地保护", "金属外壳接零保护；接地电阻合格"),
+        (5, "05", "漏电保护", "漏电保护器灵敏可靠；定期测试"),
+        (6, "06", "临时用电", "审批手续；三级配电两级保护"),
+        (7, "07", "照明", "安全电压；防潮防爆灯具"),
+    ]),
+    ("jx", "机械伤害", [
+        (1, "01", "起重机械", "检验合格；限位/制动器灵敏"),
+        (2, "02", "加工机械", "防护罩齐全；禁止戴手套操作旋转设备"),
+        (3, "03", "搅拌机械", "运转中禁止伸手入筒；料斗下禁止站人"),
+        (4, "04", "传动装置", "防护罩/防护网齐全；检修断电挂牌"),
+        (5, "05", "安全防护装置", "光电保护/双手按钮有效；严禁拆除"),
+    ]),
+    ("xf", "消防", [
+        (1, "01", "灭火器材", "配置充足；压力合格；定期检查"),
+        (2, "02", "疏散通道", "畅通无占用；指示标志清晰"),
+        (3, "03", "用火用电", "动火审批；禁烟区管理"),
+        (4, "04", "易燃物管理", "分类存放；远离火源"),
+        (5, "05", "消防设施", "消火栓/报警装置完好；定期测试"),
+        (6, "06", "动火作业", "动火证；监护人；灭火器材"),
+    ]),
+    ("lb", "临边防护", [
+        (1, "01", "基坑临边", "防护栏杆1.2m；挡脚板；警示标志"),
+        (2, "02", "楼层临边", "防护栏杆连续；无缺口"),
+        (3, "03", "楼梯口", "防护栏杆或楼梯扶手；警示"),
+        (4, "04", "电梯井口", "定型防护门；井内水平安全网"),
+        (5, "05", "通道口", "防护棚；警示标志"),
+        (6, "06", "预留洞口", "盖板固定；大洞口设栏杆"),
+    ]),
+    ("qt", "其他", [
+        (1, "01", "文明施工", "材料码放整齐；工完场清"),
+        (2, "02", "职业健康", "防护用品佩戴；职业病危害告知"),
+        (3, "03", "应急管理", "应急物资齐全；通道畅通"),
+        (4, "04", "安全标识", "警示标志齐全清晰"),
+        (5, "05", "教育培训", "三级教育；班前交底"),
+        (6, "06", "其他隐患", "未归入上述类的隐患"),
+    ]),
+]
+
 
 def parse_db_url(url: str):
     """解析 mysql+pymysql://user:pass@host:port/db?xxx。
@@ -272,6 +324,20 @@ def _migrate_hazard_audit(cur, db: str) -> bool:
     return False
 
 
+def _migrate_hazard_subcategory(cur, db: str) -> bool:
+    """O1 隐患子类迁移（幂等）：hazard 表补 subcategory 列（大类 type 下细分）。"""
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='hazard'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    if "subcategory" in cols:
+        return False
+    cur.execute("ALTER TABLE hazard ADD COLUMN subcategory VARCHAR(64) NULL COMMENT 'O1 子类名称'")
+    return True
+
+
 def _migrate_ai_chat(cur, db: str) -> bool:
     """模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 点赞/点踩）。
 
@@ -421,6 +487,11 @@ def main() -> None:
             if _migrate_hazard_audit(cur, db):
                 print("[OK] hazard 表迁移：补 audit_status/audit_by/audit_at/audit_comment（安全员隐患处理）")
 
+        # 2.713) O1 隐患子类迁移（幂等）：hazard 表补 subcategory 列
+        with conn.cursor() as cur:
+            if _migrate_hazard_subcategory(cur, db):
+                print("[OK] hazard 表迁移：补 subcategory（O1 子类）")
+
         # 2.8) 模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 反馈）
         with conn.cursor() as cur:
             if _migrate_ai_chat(cur, db):
@@ -461,6 +532,25 @@ def main() -> None:
                 print(f"[OK] 管理员 {settings.admin_username} 创建")
             else:
                 print(f"[OK] 管理员 {settings.admin_username} 已存在，跳过")
+
+        # 5) O1 隐患分类种子（幂等）：6 大类 × 子类
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM hazard_category")
+            if cur.fetchone()[0] == 0:
+                for code, name, items in _HAZARD_CATEGORIES:
+                    cur.execute(
+                        "INSERT INTO hazard_category (parent_id, code, name, check_items, sort_order) VALUES (0,%s,%s,NULL,%s)",
+                        (code, name, 0),
+                    )
+                    parent_id = cur.lastrowid
+                    for sort_no, sub_code, sub_name, sub_items in items:
+                        cur.execute(
+                            "INSERT INTO hazard_category (parent_id, code, name, check_items, sort_order) VALUES (%s,%s,%s,%s,%s)",
+                            (parent_id, f"{code}-{sub_code}", sub_name, sub_items, sort_no),
+                        )
+                print(f"[OK] 隐患分类种子 {len(_HAZARD_CATEGORIES)} 大类写入")
+            else:
+                print("[OK] 隐患分类种子已存在，跳过")
     finally:
         conn.close()
 

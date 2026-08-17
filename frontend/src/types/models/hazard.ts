@@ -80,6 +80,7 @@ export interface HazardDetail {
   rectification_images: string | null
   reject_reason: string | null
   risk_report: Record<string, unknown> | null
+  subcategory: string | null
   audit_status: HazardAuditStatus
   audit_by: number | null
   audit_at: string | null
@@ -97,6 +98,7 @@ export interface HazardCreatePayload {
   location?: string
   level: HazardLevel
   type?: string
+  subcategory?: string
   reporter_name?: string
   images: string[]
   risk_report?: Record<string, unknown> | null
@@ -119,3 +121,13 @@ export interface AnalyzeResult {
 /** H02 列表排序参数（R1 后端配套） */
 export type HazardSort = 'create_time' | 'level'
 export type SortOrder = 'asc' | 'desc'
+
+/** O1 隐患分类节点（大类 → children 子类） */
+export interface HazardCategoryNode {
+  id: number
+  parent_id: number
+  code: string
+  name: string
+  check_items: string | null
+  children?: HazardCategoryNode[]
+}

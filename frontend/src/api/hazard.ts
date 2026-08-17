@@ -2,6 +2,7 @@ import { cleanParams, request, uploadRequest } from './request'
 import type { PageResult } from '@/types/api'
 import type {
   AnalyzeResult,
+  HazardCategoryNode,
   HazardCreatePayload,
   HazardDetail,
   HazardItem,
@@ -33,6 +34,7 @@ export interface HazardQuery {
   status?: string
   level?: HazardLevel | ''
   type?: string
+  subcategory?: string
   keyword?: string
   start_time?: string
   end_time?: string
@@ -94,4 +96,9 @@ export function auditHazard(id: number, payload: { passed: boolean; comment?: st
     method: 'POST',
     data: payload,
   })
+}
+
+/** O1 隐患分类树（大类 → 子类） */
+export function listHazardCategories() {
+  return request<{ items: HazardCategoryNode[] }>({ url: '/hazard-categories', method: 'GET' })
 }

@@ -58,16 +58,34 @@
         </el-form-item>
 
         <el-form-item label="隐患类型" prop="type">
-          <el-select
-            v-model="form.type"
-            placeholder="请选择类型或手动输入（可选）"
-            clearable
-            filterable
-            allow-create
-            style="width: 240px"
-          >
-            <el-option v-for="t in HAZARD_TYPES" :key="t" :label="t" :value="t" />
-          </el-select>
+          <div class="type-row">
+            <el-select
+              v-model="form.type"
+              placeholder="选择大类（可选）"
+              clearable
+              filterable
+              allow-create
+              style="width: 180px"
+              @change="onTypeChange"
+            >
+              <el-option v-for="t in categoryRoots" :key="t.name" :label="t.name" :value="t.name" />
+            </el-select>
+            <el-select
+              v-model="form.subcategory"
+              placeholder="选择子类（可选）"
+              clearable
+              filterable
+              style="width: 200px"
+              :disabled="!form.type"
+            >
+              <el-option
+                v-for="s in currentSubcategories"
+                :key="s.name"
+                :label="s.check_items ? `${s.name}（${s.check_items}）` : s.name"
+                :value="s.name"
+              />
+            </el-select>
+          </div>
         </el-form-item>
 
         <el-form-item label="标题" prop="title">
@@ -89,13 +107,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { createHazard } from '@/api/hazard'
-import type { AnalyzeResult, HazardCreatePayload, HazardLevel } from '@/types/models/hazard'
-import { HAZARD_LEVELS, HAZARD_TYPES, hazardLevelMeta } from '@/utils/constants'
+import { createHazard, listHazardCategories } from '@/api/hazard'
+import type { AnalyzeResult, HazardCategoryNode, HazardCreatePayload, HazardLevel } from '@/types/models/hazard'
+import { HAZARD_LEVELS, hazardLevelMeta } from '@/utils/constants'
 import { percent } from '@/utils/format'
 import { useHazardStore } from '@/store/hazard'
 import { useUserStore } from '@/store/user'
@@ -111,9 +129,28 @@ const form = reactive({
   location: '',
   level: '' as HazardLevel | '',
   type: '',
+  subcategory: '',
   reporter_name: '',
   images: [] as string[],
 })
+
+// O1 分类树：大类 → 子类
+const categoryRoots = ref<HazardCategoryNode[]>([])
+const currentSubcategories = computed(() => {
+  const root = categoryRoots.value.find((r) => r.name === form.type)
+  return root?.children ?? []
+})
+function onTypeChange() {
+  form.subcategory = '' // 大类切换时清空子类
+}
+async function loadCategories() {
+  try {
+    const res = await listHazardCategories()
+    categoryRoots.value = res.items
+  } catch {
+    categoryRoots.value = []
+  }
+}
 
 // 默认现场上报人 = 当前登录用户姓名（可改，支持代报）
 const userStore = useUserStore()
@@ -135,6 +172,7 @@ const rules: FormRules = {
 
 // ---------- AI 识别结果回填 ----------
 onMounted(() => {
+  loadCategories()
   const { result, images } = hazardStore.consumeReportCarry()
   if (result) {
     analysis.value = result
@@ -170,6 +208,7 @@ async function onSubmit() {
       location: form.location.trim() || undefined,
       level: form.level as HazardLevel,
       type: form.type || undefined,
+      subcategory: form.subcategory.trim() || undefined,
       reporter_name: form.reporter_name.trim() || undefined,
       images: form.images,
       risk_report:
@@ -193,6 +232,7 @@ function resetAll() {
   form.location = ''
   form.level = ''
   form.type = ''
+  form.subcategory = ''
   form.reporter_name = userStore.user?.name ?? ''
   form.images = []
   analysis.value = null

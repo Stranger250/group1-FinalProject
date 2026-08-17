@@ -72,6 +72,7 @@ class HazardRepo:
         status: str | None = None,
         level: str | None = None,
         type_: str | None = None,
+        subcategory: str | None = None,
         keyword: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
@@ -84,7 +85,7 @@ class HazardRepo:
         """H02 隐患列表：多条件筛选 + 分页（对齐 question_repo.list_page 模板）。
 
         keyword 模糊匹配 title/description/location；create_time 时间区间为 [start, end]。
-        creator_id 非空时限定本人（如需「仅本人」可见性）。
+        creator_id 非空时限定本人（O13 数据隔离）。
         sort=level 时按严重度权重（CRITICAL>MAJOR>GENERAL>MINOR）排序；
         sort=create_time 时新上报在前（desc）或旧在前（asc），id 作次级排序键保证稳定。
         """
@@ -95,6 +96,8 @@ class HazardRepo:
             conds.append(Hazard.level == level)
         if type_:
             conds.append(Hazard.type == type_)
+        if subcategory:
+            conds.append(Hazard.subcategory == subcategory)
         if keyword:
             like = f"%{keyword}%"
             conds.append(or_(

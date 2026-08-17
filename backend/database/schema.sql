@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS hazard (
   audit_by              BIGINT       NULL COMMENT 'O13 处理人 user.id',
   audit_at              DATETIME     NULL COMMENT 'O13 处理时间',
   audit_comment         VARCHAR(255) NULL COMMENT 'O13 处理意见',
+  subcategory           VARCHAR(64)  NULL COMMENT 'O1 子类名称（大类 type 下细分，如 高处作业→临边作业）',
   create_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_hazard_no (hazard_no),
@@ -67,6 +68,20 @@ CREATE TABLE IF NOT EXISTS hazard (
   KEY idx_handler (handler_id),
   KEY idx_create_time (create_time),
   KEY idx_audit_status (audit_status)
+) ENGINE = InnoDB;
+
+-- 隐患分类表（PRD-V2 O1 三级分类体系：大类 → 子类；check_items 检查项说明）
+CREATE TABLE IF NOT EXISTS hazard_category (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  parent_id   BIGINT       NOT NULL DEFAULT 0 COMMENT '父分类 id（0=大类）',
+  code        VARCHAR(32)  NOT NULL COMMENT '分类编码（如 ga/ga-01）',
+  name        VARCHAR(64)  NOT NULL COMMENT '分类名称（如 高处作业 / 临边作业）',
+  check_items VARCHAR(255) NULL COMMENT '检查项说明',
+  enabled     TINYINT      NOT NULL DEFAULT 1 COMMENT '1=启用 0=停用',
+  sort_order  INT          NOT NULL DEFAULT 0,
+  create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_code (code),
+  KEY idx_parent (parent_id)
 ) ENGINE = InnoDB;
 
 -- 隐患图片表

@@ -31,6 +31,7 @@ class HazardCreate(BaseModel):
     location: str | None = Field(default=None, max_length=128)
     level: HazardLevelLiteral
     type: str = Field(default="其他", max_length=32)
+    subcategory: str | None = Field(default=None, max_length=64)  # O1 子类（大类 type 下细分，可选）
     reporter_name: str | None = Field(default=None, max_length=64)  # 现场上报人（缺省=当前用户姓名）
     images: list[str] = Field(default_factory=list, max_length=9)  # 单隐患最多 9 张
     risk_report: dict | None = None

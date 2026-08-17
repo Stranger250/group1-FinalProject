@@ -96,6 +96,7 @@ class Hazard(Base):
     audit_by: Mapped[int | None] = mapped_column(BigInteger)  # 处理人 user.id
     audit_at: Mapped[datetime | None] = mapped_column(DateTime)  # 处理时间
     audit_comment: Mapped[str | None] = mapped_column(String(255))  # 处理意见
+    subcategory: Mapped[str | None] = mapped_column(String(64))  # O1 子类名称（大类 type 下细分）
     create_time: Mapped[datetime] = mapped_column(DateTime, index=True, server_default=func.now())
     update_time: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -122,4 +123,19 @@ class HazardLog(Base):
     old_status: Mapped[str | None] = mapped_column(String(16))
     new_status: Mapped[str | None] = mapped_column(String(16))
     remark: Mapped[str | None] = mapped_column(String(255))
+    create_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class HazardCategory(Base):
+    """O1 隐患分类（三级体系：大类 parent_id=0 → 子类）。"""
+
+    __tablename__ = "hazard_category"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    parent_id: Mapped[int] = mapped_column(BigInteger, default=0, index=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    check_items: Mapped[str | None] = mapped_column(String(255))  # 检查项说明
+    enabled: Mapped[int] = mapped_column(BigInteger, default=1, nullable=False)  # 1=启用 0=停用
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     create_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

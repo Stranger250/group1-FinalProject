@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..ai.vision import VisionError, analyze_image, annotate_image
@@ -31,6 +32,34 @@ from ..utils.response import resp
 from ..utils.upload import save_image_upload
 
 router = APIRouter(prefix="/api/v1/hazards", tags=["隐患安全管理 H01-H03"])
+
+# O1 隐患分类树（独立前缀，登录即可访问）
+category_router = APIRouter(prefix="/api/v1/hazard-categories", tags=["隐患分类 O1"])
+
+
+@category_router.get("", summary="O1 隐患分类树（大类 → 子类，enabled=1）")
+def list_categories(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from ..model.hazard import HazardCategory
+
+    rows = db.execute(
+        select(HazardCategory).where(HazardCategory.enabled == 1)
+        .order_by(HazardCategory.parent_id.asc(), HazardCategory.sort_order.asc(), HazardCategory.id.asc())
+    ).scalars().all()
+    children: dict[int, list[dict]] = {}
+    roots: list[dict] = []
+    for c in rows:
+        item = {"id": c.id, "parent_id": c.parent_id, "code": c.code,
+                "name": c.name, "check_items": c.check_items}
+        if c.parent_id == 0:
+            roots.append(item)
+        else:
+            children.setdefault(c.parent_id, []).append(item)
+    for r in roots:
+        r["children"] = children.get(r["id"], [])
+    return resp({"items": roots})
 
 # 管理向接口门禁：闭环需 SAFETY/ADMIN（角色枚举 RoleId）
 _MANAGE = require_roles(RoleId.SAFETY, RoleId.ADMIN)
@@ -110,6 +139,7 @@ def list_hazards(
     status_: str | None = Query(default=None, alias="status", description="状态：WAIT_PROCESS/FINISHED"),
     level: str | None = Query(default=None, description="等级：CRITICAL/MAJOR/GENERAL/MINOR"),
     type_: str | None = Query(default=None, alias="type", description="类型：高处作业/用电安全/…"),
+    subcategory: str | None = Query(default=None, description="O1 子类：临边作业/配电箱柜/…"),
     keyword: str | None = Query(default=None, description="关键字：匹配标题/描述/位置"),
     start_time: Annotated[datetime | None, Query(description="上报时间区间起点（ISO）")] = None,
     end_time: Annotated[datetime | None, Query(description="上报时间区间终点（ISO）")] = None,
@@ -121,8 +151,8 @@ def list_hazards(
     db: Session = Depends(get_db),
 ):
     return resp(HazardService.list_page(
-        db, user=user, status_=status_, level=level, type_=type_, keyword=keyword,
-        start_time=start_time, end_time=end_time, page=page, page_size=page_size,
+        db, user=user, status_=status_, level=level, type_=type_, subcategory=subcategory,
+        keyword=keyword, start_time=start_time, end_time=end_time, page=page, page_size=page_size,
         sort=sort, order=order,
     ))
 

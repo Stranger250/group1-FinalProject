@@ -54,6 +54,7 @@ class HazardService:
         title = (payload.title or "").strip() or HazardService._auto_title(payload.description)
         location = (payload.location or "").strip() or "未填写"
         hazard_type = (payload.type or "").strip() or "其他"
+        subcategory = (payload.subcategory or "").strip() or None
         description = payload.description.strip()
         # 现场上报人：可代报（填他人姓名）；缺省取当前登录用户姓名
         reporter_name = (payload.reporter_name or "").strip() or user.name
@@ -67,7 +68,7 @@ class HazardService:
                     db, commit=False,
                     hazard_no=f"{prefix}-{seq:04d}",
                     title=title, description=description, location=location,
-                    level=payload.level, type=hazard_type,
+                    level=payload.level, type=hazard_type, subcategory=subcategory,
                     status=HazardStatus.WAIT_PROCESS,
                     creator_id=user.id, reporter_name=reporter_name,
                     risk_report=payload.risk_report,
@@ -99,6 +100,7 @@ class HazardService:
         status_: str | None = None,
         level: str | None = None,
         type_: str | None = None,
+        subcategory: str | None = None,
         keyword: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
@@ -107,13 +109,13 @@ class HazardService:
         sort: str = "create_time",  # create_time | level（PRD H02 排序验收）
         order: str = "desc",        # asc | desc
     ) -> dict:
-        """H02 隐患列表（PRD：分页 + 状态/等级/类型/时间区间/关键字筛选 + 排序）。
+        """H02 隐患列表（PRD：分页 + 状态/等级/类型/子类/时间区间/关键字筛选 + 排序）。
 
         O13 数据隔离：普通用户仅见本人上报的隐患；安全员/管理员可见全部。
         """
         scope_creator_id = None if user.role_id in (RoleId.SAFETY, RoleId.ADMIN) else user.id
         items, total = HazardRepo.list_page(
-            db, status=status_, level=level, type_=type_, keyword=keyword,
+            db, status=status_, level=level, type_=type_, subcategory=subcategory, keyword=keyword,
             start_time=start_time, end_time=end_time, page=page, page_size=page_size,
             sort=sort, order=order, creator_id=scope_creator_id,
         )
@@ -353,6 +355,7 @@ class HazardService:
             "rectification_images": h.rectification_images,
             "reject_reason": h.reject_reason,
             "risk_report": h.risk_report,
+            "subcategory": h.subcategory,  # O1 子类
             # O13 处理状态/结果（处理人/时间/意见）
             "audit_status": h.audit_status,
             "audit_by": h.audit_by,
@@ -393,6 +396,7 @@ class HazardService:
             "creator_id": h.creator_id,
             "creator_name": names.get(h.creator_id, ""),
             "reporter_name": h.reporter_name or names.get(h.creator_id, ""),  # 现场上报人（兼容旧数据）
+            "subcategory": h.subcategory,  # O1 子类
             "audit_status": h.audit_status,  # O13 处理状态（列表展示用）
             "image_count": counts.get(h.id, 0),
             "create_time": h.create_time.isoformat() if h.create_time else None,
