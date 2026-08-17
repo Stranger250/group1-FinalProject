@@ -32,6 +32,8 @@ export interface ChatCitation {
   score: number | null
   /** 原文链接（SSE citations 提供） */
   sourceUrl?: string
+  /** O7 行政层级（SSE citations 提供）：national 国家级 / province 省级 / lower 更低级 */
+  tier?: 'national' | 'province' | 'lower'
   /** 是否可点击查看原文（doc_id + article_no 齐备） */
   clickable: boolean
 }
@@ -71,6 +73,7 @@ export function normalizeLiveCitation(raw: unknown): ChatCitation | null {
       typeof o.snippet === 'string' ? o.snippet : typeof o.content === 'string' ? o.content : '',
     score: typeof o.score === 'number' ? o.score : null,
     sourceUrl: typeof o.source_url === 'string' ? o.source_url : undefined,
+    tier: ['national', 'province', 'lower'].includes(String(o.tier)) ? (o.tier as ChatCitation['tier']) : undefined,
     clickable: !!docId && !!articleNo,
   }
 }

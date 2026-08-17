@@ -48,6 +48,20 @@ def _jlist(v) -> list[str]:
         return []
 
 
+def _tier_of(meta: dict) -> str:
+    """O7 回答依据行政层级：national 国家级 / province 省级 / lower 更低级（企业规范等）。
+
+    判定口径（PRD-V2 O7）：企业级语料（company/sop/plan/case）→ lower；
+    region=四川 → province；其余（国家法律/行政法规/部门规章）→ national。
+    """
+    doc_type = meta.get("doc_type") or ""
+    if doc_type in ("company", "sop", "plan", "case"):
+        return "lower"
+    if (meta.get("region") or "") == "四川":
+        return "province"
+    return "national"
+
+
 @dataclass
 class SearchResult:
     blocks: list[RetrievedBlock] = field(default_factory=list)
@@ -152,7 +166,14 @@ class HybridRetriever:
             parent = self._parent_by_chunk.get(cid, cid)
             parent_rrf[parent] = max(parent_rrf.get(parent, 0.0), sc)
         result.rrf_pool = sorted(parent_rrf.values(), reverse=True)
-        parent_candidates = sorted(parent_rrf.items(), key=lambda x: x[1], reverse=True)
+        # O7 依据分层：行政层级加权（国家优先）——国家级 ×1.10、省级 ×1.05、更低级(企业语料) ×1.00，
+        # 在父块排序与置信度前生效，让国家级依据在同类相关度下更靠前（同层内仍按 RRF）。
+        tier_bonus = {"national": 1.10, "province": 1.05, "lower": 1.00}
+        parent_candidates = sorted(
+            parent_rrf.items(),
+            key=lambda x: x[1] * tier_bonus.get(_tier_of(self._meta_by_id.get(x[0], {})), 1.0),
+            reverse=True,
+        )
 
         # ④ 交叉引用展开（Top-3 含 ref_out → 查回被引父块，expanded=true，不二次展开）
         expanded_ids: list[str] = []
@@ -167,6 +188,11 @@ class HybridRetriever:
         pool_ids = [cid for cid, _ in parent_candidates] + expanded_ids
         pairs = [(cid, self._meta_by_id[cid]["content"]) for cid in pool_ids]
         reranked = get_reranker().rerank(query, pairs, top_n=p.rerank_top_n)
+        # O7 国家优先：rerank 分数同级时按层级 bonus 微调顺序（入选集合不变，仅排序）
+        reranked.sort(
+            key=lambda t: t[1] * tier_bonus.get(_tier_of(self._meta_by_id.get(t[0], {})), 1.0),
+            reverse=True,
+        )
         top_ids = [cid for cid, _, _ in reranked]
 
         # ⑥ 置信度：相对理论峰值归一化 → mode（分布式日志）
@@ -215,6 +241,7 @@ class HybridRetriever:
             category=m.get("category", ""),
             doc_level=int(m.get("doc_level") or 3),
             region=m.get("region", ""),
+            tier=_tier_of(m),  # O7 行政层级（national/province/lower）
             chapter=m.get("chapter", ""),
             article_no=m.get("article_no", ""),
             content=m.get("content", ""),

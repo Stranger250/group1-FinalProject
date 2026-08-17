@@ -61,12 +61,13 @@ class RetrievedBlock:
     confidence: float = 0.0
     mode: str = "full"
     expanded: bool = False
+    tier: str = "national"  # O7 行政层级：national 国家级 / province 省级 / lower 更低级
 
     def to_source(self, n: int, rrf_k: int) -> dict:
         """meta/done 引用卡片（前端先渲染"依据来源"）。
 
         score 为展示相关度（display_score，相对理论峰值归一化，见模块级说明），
-        前端据此渲染 0-100% 的「相关度」进度条。
+        前端据此渲染 0-100% 的「相关度」进度条；tier 供前端按行政层级分组展示。
         """
         return {
             "n": n,
@@ -80,6 +81,7 @@ class RetrievedBlock:
             "source_url": self.source_url,
             "snippet": self.content[:_SNIPPET_CHARS],
             "score": display_score(self.rrf_score, rrf_k),
+            "tier": self.tier,
         }
 
 
