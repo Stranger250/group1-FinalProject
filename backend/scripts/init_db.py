@@ -93,6 +93,82 @@ def parse_db_url(url: str):
     return u.username, u.password or "", u.host, u.port or 3306, u.database
 
 
+def _migrate_knowledge_document_meta(cur, db: str) -> bool:
+    """O10 文档库迁移（幂等）：knowledge_document 补 doc_type/doc_level/region/source_url 列。
+
+    老数据（loader 建的 101 篇）没有这些列值，从 crawler_output JSON 回填
+    （容器挂载 /crawler_output，文件名=title.json，与 loader path 一致）；
+    找不到源 JSON 的行保持 NULL（前端展示兜底），不影响检索。
+    """
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='knowledge_document'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    adds = []
+    if "doc_type" not in cols:
+        adds.append("ADD COLUMN doc_type VARCHAR(16) NULL")
+    if "doc_level" not in cols:
+        adds.append("ADD COLUMN doc_level INT NULL")
+    if "region" not in cols:
+        adds.append("ADD COLUMN region VARCHAR(64) NULL")
+    if "source_url" not in cols:
+        adds.append("ADD COLUMN source_url VARCHAR(512) NULL")
+    if not adds:
+        # 列已存在：回填 doc_type 为 NULL 的行（幂等，二次跑不再重复）
+        _backfill_doc_meta(cur)
+        return False
+    cur.execute("ALTER TABLE knowledge_document " + ", ".join(adds))
+    _backfill_doc_meta(cur)
+    return True
+
+
+def _backfill_doc_meta(cur) -> None:
+    """从 crawler_output JSON 回填 knowledge_document 的 doc_type/doc_level/region/source_url。"""
+    import glob as _glob
+    import json as _json
+    import os as _os
+
+    data_dir = _os.environ.get("CRAWLER_OUTPUT_DIR", "/crawler_output")
+    if not _os.path.isdir(data_dir):
+        return
+    cur.execute(
+        "SELECT id, name, path FROM knowledge_document WHERE doc_type IS NULL OR doc_type = ''"
+    )
+    rows = cur.fetchall()
+    by_name = {}
+    for p in _glob.glob(_os.path.join(data_dir, "*.json")):
+        if p.endswith("index.json") or _os.path.basename(p).startswith("_"):
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                raw = _json.load(f)
+        except Exception:
+            continue
+        by_name[(raw.get("title") or "").strip()] = raw
+    updated = 0
+    for doc_id, name, path in rows:
+        raw = by_name.get((name or "").strip())
+        if raw is None and path:
+            raw = by_name.get(_os.path.splitext(path)[0])
+        if raw is None:
+            continue
+        cur.execute(
+            "UPDATE knowledge_document SET doc_type=%s, doc_level=%s, region=%s, source_url=%s WHERE id=%s",
+            (
+                str(raw.get("doc_type") or "")[:16] or None,
+                int(raw["doc_level"]) if isinstance(raw.get("doc_level"), int) else None,
+                str(raw.get("region") or "")[:64] or None,
+                str(raw.get("source_url") or "")[:512] or None,
+                doc_id,
+            ),
+        )
+        updated += 1
+    if updated:
+        print(f"[OK] knowledge_document 元数据回填 {updated} 行（O10）")
+
+
 def _migrate_question_rewrite(cur, db: str) -> bool:
     """E02 重写增强迁移（幂等）：question 表补齐 rewrite_of / rewrite_feedback / rewrite_pending。
 
@@ -570,6 +646,11 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_user_profile(cur, db):
                 print("[OK] user 表迁移：新增 email/avatar 列（个人中心）")
+
+        # 2.12) O10 文档库迁移（幂等）：knowledge_document 补 doc_type/doc_level/region/source_url
+        with conn.cursor() as cur:
+            if _migrate_knowledge_document_meta(cur, db):
+                print("[OK] knowledge_document 表迁移：O10 文档库元数据列 + crawler_output 回填")
 
         # 3) 初始化角色（幂等）
         with conn.cursor() as cur:

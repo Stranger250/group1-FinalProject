@@ -39,10 +39,11 @@ def _decode_text(data: bytes) -> str:
     return data.decode("latin-1", errors="replace")
 
 
-def parse_upload(file: UploadFile) -> dict:
+def parse_upload(file: UploadFile, max_chars: int | None = _MAX_CHARS) -> dict:
     """校验并解析上传文档，返回 {filename, ext, chars, text}。
 
-    失败抛 400（类型/大小/解析失败）。text 已截断 ≤8000 字。
+    失败抛 400（类型/大小/解析失败）。max_chars=None 时不截断（O10 建库全文入库）；
+    默认截断 ≤8000 字（O11 会话上下文）。
     """
     filename = file.filename or "未命名文件"
     suffix = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
@@ -86,9 +87,9 @@ def parse_upload(file: UploadFile) -> dict:
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="未能从文档中提取到文本（可能为扫描件）")
 
-    truncated = len(text) > _MAX_CHARS
+    truncated = max_chars is not None and len(text) > max_chars
     if truncated:
-        text = text[:_MAX_CHARS]
+        text = text[:max_chars]
     return {
         "filename": filename,
         "ext": suffix.lstrip("."),

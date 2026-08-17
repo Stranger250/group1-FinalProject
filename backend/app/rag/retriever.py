@@ -89,6 +89,17 @@ class HybridRetriever:
 
     # ---------- 索引（一次性） ----------
 
+    def reload(self) -> None:
+        """O10 文档停用/删除/上传后重载索引（块集合变化即时生效）。
+
+        重载期间其他线程可能正在 search —— 用模块级锁串行化 _load_index，
+        并把旧索引对象原地替换（search 持有的是 self 属性引用，替换后自然读到新索引）。
+        """
+        with _retriever_lock:
+            data = self._col.get(include=["documents", "metadatas"])
+            if data["ids"]:
+                self._load_index()
+
     def _load_index(self) -> None:
         data = self._col.get(include=["documents", "metadatas"])
         if not data["ids"]:

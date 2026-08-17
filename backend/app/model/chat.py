@@ -85,6 +85,11 @@ class KnowledgeDocument(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[str] = mapped_column(String(16), nullable=False)  # category：法律/行政法规/部门规章/政府规章/地方性法规
+    # O10 文档库扩展列（幂等迁移 _migrate_knowledge_document_meta 补齐；老数据从 crawler_output 回填）
+    doc_type: Mapped[str | None] = mapped_column(String(16))       # law/regulation/company/sop/plan/case
+    doc_level: Mapped[int | None] = mapped_column(mysql.INTEGER)   # 行政层级：1 法律 2 行政法规 3 部门规章 …
+    region: Mapped[str | None] = mapped_column(String(64))         # 区域：四川/国家/…
+    source_url: Mapped[str | None] = mapped_column(String(512))    # 来源链接
     path: Mapped[str] = mapped_column(String(255), nullable=False)  # 源文件名
     status: Mapped[str] = mapped_column(
         String(16), default=KnowledgeDocumentStatus.PENDING,

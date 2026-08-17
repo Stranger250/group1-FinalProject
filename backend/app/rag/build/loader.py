@@ -181,6 +181,10 @@ def _write_mysql(blocks_by_doc: dict[str, list[Block]], force: bool) -> tuple[in
             kdoc = KnowledgeDocument(
                 name=doc.title,
                 type=doc.category,
+                doc_type=doc.doc_type,
+                doc_level=doc.doc_level,
+                region=doc.region,
+                source_url=doc.source_url,
                 path=doc.title + ".json",  # 源文件与 title 同名（已核实）
                 status="SUCCESS",
                 chunk_count=len(blocks),
@@ -249,6 +253,11 @@ def _write_chroma(blocks_by_doc: dict[str, list[Block]], force: bool) -> tuple[i
     embedder = get_embedder()
     started = time.time()
     count = 0
+    before_count = 0
+    try:
+        before_count = collection.count()
+    except Exception:
+        before_count = 0
     batch_ids: list[str] = []
     batch_docs: list[str] = []
     batch_meta: list[dict] = []
@@ -300,10 +309,11 @@ def _write_chroma(blocks_by_doc: dict[str, list[Block]], force: bool) -> tuple[i
         [sys.executable, "-c", _code, settings.chroma_persist_dir, settings.chroma_collection],
         capture_output=True, text=True, encoding="utf-8", timeout=120,
     )
-    if not (p.returncode == 0 and p.stdout.strip().startswith(str(count))):
+    if not (p.returncode == 0 and p.stdout.strip().startswith(str(before_count + count))):
         raise RuntimeError(
             "Chroma 落盘校验失败（新鲜进程不可读）：compactor 未把 HNSW 落盘。\n"
-            f"  rc={p.returncode} out={p.stdout.strip()!r} err={p.stderr.strip()[:200]!r}\n"
+            f"  rc={p.returncode} out={p.stdout.strip()!r} err={p.stderr.strip()[:200]!r} "
+            f"expect={before_count + count} (before={before_count}+added={count})\n"
             "  排查：关闭可能并发访问 data/chroma_kb 的进程后重跑 --force。"
         )
     logger.info("Chroma 落盘自检通过：新鲜进程 count=%s", count)
