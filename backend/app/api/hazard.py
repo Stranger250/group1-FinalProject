@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -81,19 +81,27 @@ async def upload_image(
     return resp({"url": f"/uploads/{rel_path}"})
 
 
-@router.post("/analyze", summary="H01 AI 视觉识别：上传一张图并返回隐患类型/等级/描述建议")
+@router.post("/analyze", summary="H01 AI 视觉识别：上传一张图（或指定已上传 url）并返回隐患类型/等级/描述建议")
 async def analyze(
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(default=None),
+    url: str | None = Form(default=None, description="已上传图片的 /uploads/... 路径（与 file 二选一，O3 单页识别用）"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """上传图片 → 视觉模型识别 → 返回 url + type/level/description + bbox + 标注图 annotated_url。
+    """上传图片（或复用已上传 url）→ 视觉模型识别 → 返回 url + type/level/description + bbox + 标注图 annotated_url。
 
     bbox 为归一化坐标 [x1,y1,x2,y2]（无隐患为 null）；标注图是原图画好红色框的副本，
     两者都随 report 落 hazard.risk_report。前端可回显建议并展示标注图供用户确认。
     视觉模型未配置或调用失败 → 503 提示（不阻断上报，用户可手动选类型/等级）。
     """
-    rel_path = save_image_upload(file, get_settings())
+    if file is not None:
+        rel_path = save_image_upload(file, get_settings())
+    elif url:
+        rel_path = url.removeprefix("/uploads/")
+        if not (Path(get_settings().upload_dir) / rel_path).is_file():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="图片不存在")
+    else:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="需提供 file 或 url")
     try:
         result = await asyncio.wait_for(analyze_image(_upload_path(rel_path)), timeout=290.0)
     except VisionError as exc:

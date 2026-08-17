@@ -1,43 +1,62 @@
-<!-- H01 隐患上报（P02）：单栏表单（描述/等级必填 + 位置/类型/标题可选 + 多图上传 ≤9）。
-     AI 识别已拆分至「AI 分析」子菜单页；此处 onMounted 读取该页带回的结果自动回填表单，
-     并随上报落 risk_report，可一键清除提示。 -->
+<!-- H01 隐患上报（O3 三段式整合）：① 图片区（上传+AI识别+标注图+保留勾选）→ ② 隐患区（等级/类型/子类/位置/标题/上报人）→ ③ 详细内容区（描述）。
+     单页完成「传图 → 识别 → 确认（勾选保留）→ 提交」全流程；独立「AI 分析」页入口已移除（接口保留兼容）。 -->
 <template>
   <div class="hazard-report">
     <div class="page-head">
       <h2 class="page-title">隐患上报</h2>
-      <el-text type="info" size="small">发现安全隐患，请及时上报，管理员将跟进闭环</el-text>
+      <el-text type="info" size="small">发现安全隐患，请及时上报。支持 AI 识别辅助填写，管理员与安全员将跟进处理</el-text>
     </div>
 
-    <el-alert
-      v-if="analysis"
-      type="success"
-      show-icon
-      :closable="true"
-      class="prefill-alert"
-      title="已带入识别结果（来自「AI 分析」页）"
-    >
-      <div class="prefill-body">
-        <span>等级：{{ hazardLevelMeta(analysis.level_suggest).label }} · 类型：{{ analysis.type_suggest || '未识别' }} · 置信度：{{ percent(analysis.confidence) }}</span>
-        <el-button size="small" text type="primary" @click="clearAnalysis">清除回填</el-button>
+    <!-- ① 图片区 -->
+    <el-card shadow="never" class="section-card">
+      <template #header>
+        <span class="section-title"><el-icon><Picture /></el-icon> 现场图片</span>
+        <span class="section-hint">第一步：上传现场照片（最多 9 张）</span>
+      </template>
+      <HazardImageUpload ref="imageUploadRef" v-model="form.images" :max="9" />
+      <div class="analyze-row">
+        <el-button
+          type="primary"
+          plain
+          :icon="'MagicStick'"
+          :loading="analyzing"
+          :disabled="!form.images.length"
+          @click="onAnalyze"
+        >
+          AI 识别隐患
+        </el-button>
+        <el-text v-if="!form.images.length" type="info" size="small">上传图片后可一键识别隐患类型/等级/描述</el-text>
+        <el-text v-else-if="analysis" type="success" size="small">
+          已识别：{{ analysis.type_suggest || '未识别' }} · 置信度 {{ percent(analysis.confidence) }}
+        </el-text>
       </div>
-      <div class="prefill-body keep-row">
-        <el-checkbox v-model="keepRiskReport">保留 AI 识别结果（标注图与检测明细随上报保存；不勾选则仅保留原图）</el-checkbox>
+      <!-- 识别结果：标注图 + 摘要 + 保留勾选 -->
+      <div v-if="analysis" class="analysis-block">
+        <el-image
+          v-if="analysis.annotated_url"
+          :src="analysis.annotated_url"
+          :preview-src-list="[analysis.annotated_url]"
+          fit="contain"
+          class="annotated-img"
+        />
+        <div class="analysis-meta">
+          <div class="meta-line">
+            <el-tag type="warning" size="small">{{ hazardLevelMeta(analysis.level_suggest).label }}</el-tag>
+            <span class="meta-text">{{ analysis.description || '未生成描述' }}</span>
+          </div>
+          <el-checkbox v-model="keepRiskReport">保留 AI 识别结果（标注图与检测明细随上报保存；不勾选则仅保留原图）</el-checkbox>
+          <el-button size="small" text type="primary" @click="clearAnalysis">清除识别结果</el-button>
+        </div>
       </div>
-    </el-alert>
+    </el-card>
 
-    <el-card shadow="never">
+    <!-- ② 隐患区 -->
+    <el-card shadow="never" class="section-card">
+      <template #header>
+        <span class="section-title"><el-icon><Warning /></el-icon> 隐患概要</span>
+        <span class="section-hint">第二步：填写隐患基本信息</span>
+      </template>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="96px" label-position="right">
-        <el-form-item label="隐患描述" prop="description">
-          <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="5"
-            maxlength="2000"
-            show-word-limit
-            placeholder="请描述隐患的具体情况、位置与可能造成的后果"
-          />
-        </el-form-item>
-
         <el-form-item label="隐患等级" prop="level">
           <el-radio-group v-model="form.level">
             <el-radio v-for="l in HAZARD_LEVELS" :key="l.value" :value="l.value">
@@ -47,14 +66,6 @@
               </span>
             </el-radio>
           </el-radio-group>
-        </el-form-item>
-
-        <el-form-item label="隐患位置" prop="location">
-          <el-input v-model="form.location" maxlength="128" placeholder="如：3 号塔吊东侧基坑、二期综合楼 5 层（可选）" />
-        </el-form-item>
-
-        <el-form-item label="现场上报人" prop="reporter_name">
-          <el-input v-model="form.reporter_name" maxlength="64" placeholder="默认当前登录用户，可填现场实际上报人" />
         </el-form-item>
 
         <el-form-item label="隐患类型" prop="type">
@@ -75,7 +86,7 @@
               placeholder="选择子类（可选）"
               clearable
               filterable
-              style="width: 200px"
+              style="width: 220px"
               :disabled="!form.type"
             >
               <el-option
@@ -88,15 +99,37 @@
           </div>
         </el-form-item>
 
+        <el-form-item label="隐患位置" prop="location">
+          <el-input v-model="form.location" maxlength="128" placeholder="如：3 号塔吊东侧基坑、二期综合楼 5 层（可选）" />
+        </el-form-item>
+
+        <el-form-item label="现场上报人" prop="reporter_name">
+          <el-input v-model="form.reporter_name" maxlength="64" placeholder="默认当前登录用户，可填现场实际上报人" />
+        </el-form-item>
+
         <el-form-item label="标题" prop="title">
           <el-input v-model="form.title" maxlength="128" placeholder="不填将自动截取描述前 20 字（可选）" />
         </el-form-item>
+      </el-form>
+    </el-card>
 
-        <el-form-item label="现场图片" prop="images">
-          <HazardImageUpload ref="imageUploadRef" v-model="form.images" :max="9" />
-          <div class="upload-hint">最多上传 9 张，支持预览；建议上传清晰、能定位隐患的现场照片</div>
+    <!-- ③ 详细内容区 -->
+    <el-card shadow="never" class="section-card">
+      <template #header>
+        <span class="section-title"><el-icon><Document /></el-icon> 详细内容</span>
+        <span class="section-hint">第三步：描述隐患具体情况</span>
+      </template>
+      <el-form ref="detailFormRef" :model="form" :rules="rules" label-width="96px" label-position="right">
+        <el-form-item label="隐患描述" prop="description">
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="5"
+            maxlength="2000"
+            show-word-limit
+            placeholder="请描述隐患的具体情况、位置与可能造成的后果"
+          />
         </el-form-item>
-
         <el-form-item>
           <el-button type="primary" :loading="submitting" :icon="'Check'" @click="onSubmit">提交上报</el-button>
           <el-button @click="resetAll">重置</el-button>
@@ -107,11 +140,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, computed } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { createHazard, listHazardCategories } from '@/api/hazard'
+import { analyzeHazardImage, createHazard, listHazardCategories } from '@/api/hazard'
 import type { AnalyzeResult, HazardCategoryNode, HazardCreatePayload, HazardLevel } from '@/types/models/hazard'
 import { HAZARD_LEVELS, hazardLevelMeta } from '@/utils/constants'
 import { percent } from '@/utils/format'
@@ -120,9 +153,11 @@ import { useUserStore } from '@/store/user'
 import HazardImageUpload from '@/components/hazard/HazardImageUpload.vue'
 
 const router = useRouter()
+const userStore = useUserStore()
 const hazardStore = useHazardStore()
 
 const formRef = ref<FormInstance>()
+const detailFormRef = ref<FormInstance>()
 const form = reactive({
   title: '',
   description: '',
@@ -134,6 +169,17 @@ const form = reactive({
   images: [] as string[],
 })
 
+// 默认现场上报人 = 当前登录用户姓名（可改，支持代报）
+if (userStore.user?.name) form.reporter_name = userStore.user.name
+
+/** AI 识别结果（回填表单 + 随上报落 risk_report） */
+const analysis = ref<AnalyzeResult | null>(null)
+
+/** 是否保留 AI 识别结果（B1：勾选保留 → risk_report 落库含 kept=true；不勾选 → 仅原图） */
+const keepRiskReport = ref(true)
+
+const analyzing = ref(false)
+
 // O1 分类树：大类 → 子类
 const categoryRoots = ref<HazardCategoryNode[]>([])
 const currentSubcategories = computed(() => {
@@ -141,7 +187,7 @@ const currentSubcategories = computed(() => {
   return root?.children ?? []
 })
 function onTypeChange() {
-  form.subcategory = '' // 大类切换时清空子类
+  form.subcategory = ''
 }
 async function loadCategories() {
   try {
@@ -152,16 +198,6 @@ async function loadCategories() {
   }
 }
 
-// 默认现场上报人 = 当前登录用户姓名（可改，支持代报）
-const userStore = useUserStore()
-if (userStore.user?.name) form.reporter_name = userStore.user.name
-
-/** 「AI 分析」页带回的识别结果（回填表单 + 随上报落 risk_report） */
-const analysis = ref<AnalyzeResult | null>(null)
-
-/** 是否保留 AI 识别结果（B1：勾选保留 → risk_report 落库含 kept=true；不勾选 → 仅原图，risk_report=null） */
-const keepRiskReport = ref(true)
-
 const rules: FormRules = {
   description: [
     { required: true, message: '请填写隐患描述', trigger: 'blur' },
@@ -170,21 +206,25 @@ const rules: FormRules = {
   level: [{ required: true, message: '请选择隐患等级', trigger: 'change' }],
 }
 
-// ---------- AI 识别结果回填 ----------
-onMounted(() => {
-  loadCategories()
-  const { result, images } = hazardStore.consumeReportCarry()
-  if (result) {
-    analysis.value = result
-    if (result.type_suggest) form.type = result.type_suggest
-    if (result.level_suggest) form.level = result.level_suggest
-    if (result.description && !form.description) form.description = result.description
+/** 单页 AI 识别：识别第一张图 → 回填类型/等级/描述 + 展示标注图 */
+async function onAnalyze() {
+  if (!form.images.length) return
+  analyzing.value = true
+  try {
+    const res = (await analyzeHazardImage({ url: form.images[0] })).data
+    analysis.value = res
+    if (res.type_suggest && !form.type) form.type = res.type_suggest
+    if (res.level_suggest) form.level = res.level_suggest
+    if (res.description && !form.description) form.description = res.description
+    keepRiskReport.value = true
+  } catch {
+    // 503 视觉降级：已由 request 层提示，用户可手动填写
+  } finally {
+    analyzing.value = false
   }
-  // 带回 AI 分析页已上传的现场图片（避免再次上传）
-  if (images.length && !form.images.length) form.images = images
-})
+}
 
-/** 清除回填：仅清除提示与 risk_report 附带的识别信息，不重置已填表单 */
+/** 清除识别：仅清除提示与 risk_report 附带信息，不重置已填表单 */
 function clearAnalysis() {
   analysis.value = null
   keepRiskReport.value = true
@@ -238,7 +278,20 @@ function resetAll() {
   analysis.value = null
   keepRiskReport.value = true
   formRef.value?.clearValidate()
+  detailFormRef.value?.clearValidate()
 }
+
+onMounted(() => {
+  loadCategories()
+  // 兼容旧入口：从「AI 分析」页跳转过来时带回的识别结果（老页面路由已移除，保留回填能力）
+  const { result } = hazardStore.consumeReportCarry()
+  if (result) {
+    analysis.value = result
+    if (result.type_suggest) form.type = result.type_suggest
+    if (result.level_suggest) form.level = result.level_suggest
+    if (result.description && !form.description) form.description = result.description
+  }
+})
 </script>
 
 <style scoped>
@@ -246,44 +299,76 @@ function resetAll() {
   max-width: 960px;
   margin: 0 auto;
 }
-
 .page-head {
   margin-bottom: 16px;
 }
-
 .page-title {
   margin: 0 0 4px;
   font-size: 20px;
   color: var(--el-text-color-primary, #232b2a);
 }
-
-.prefill-alert {
+.section-card {
   margin-bottom: 16px;
 }
-
-.prefill-body {
+.section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.section-hint {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary, #909399);
+}
+.analyze-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
+  margin-top: 12px;
 }
-
+.analysis-block {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--el-fill-color-light, #f5f7fa);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.annotated-img {
+  width: 260px;
+  max-height: 180px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.analysis-meta {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.meta-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.meta-text {
+  font-size: 13px;
+  color: var(--el-text-color-primary, #232b2a);
+}
+.type-row {
+  display: flex;
+  gap: 10px;
+}
 .level-option {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
-
 .level-desc {
   font-size: 12px;
-  color: var(--el-text-color-secondary, #707a78);
-}
-
-.upload-hint {
-  width: 100%;
-  font-size: 12px;
-  color: var(--el-text-color-placeholder, #a5acaa);
-  margin-top: 6px;
+  color: var(--el-text-color-secondary, #909399);
 }
 </style>

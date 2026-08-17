@@ -18,10 +18,11 @@ export function uploadHazardImage(file: File) {
   return uploadRequest<{ url: string }>({ url: '/hazards/upload', method: 'POST', data: form, timeout: 30_000 })
 }
 
-/** AI 视觉识别单图（analyze）→ 建议 + detections + 多框标注图。503 由调用方降级。 */
-export function analyzeHazardImage(file: File) {
+/** AI 视觉识别（analyze）：上传文件或指定已上传 url → 建议 + detections + 多框标注图。503 由调用方降级。 */
+export function analyzeHazardImage(payload: { file?: File; url?: string }) {
   const form = new FormData()
-  form.append('file', file)
+  if (payload.file) form.append('file', payload.file)
+  if (payload.url) form.append('url', payload.url)
   return uploadRequest<AnalyzeResult>({ url: '/hazards/analyze', method: 'POST', data: form, timeout: 300_000 })
 }
 

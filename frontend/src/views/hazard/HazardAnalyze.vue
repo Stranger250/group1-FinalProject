@@ -174,7 +174,7 @@ async function onAnalyzeAll() {
       continue
     }
     try {
-      const res = await analyzeHazardImage(file)
+      const res = await analyzeHazardImage({ file })
       if (res.code === 200) {
         hazardStore.setAnalyzeResult(url, res.data)
         hazardStore.setAnalyzeStatus(url, 'done')

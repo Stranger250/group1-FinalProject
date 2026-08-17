@@ -28,7 +28,6 @@ const MENU: MenuGroup[] = [
     children: [
       { title: '隐患列表', path: '/hazards', icon: 'List' },
       { title: '隐患上报', path: '/hazards/report', icon: 'EditPen' },
-      { title: 'AI 分析', path: '/hazards/analyze', icon: 'MagicStick' },
       { title: '隐患处理', path: '/hazards/audit', icon: 'Stamp', roles: [ROLE.SAFETY, ROLE.ADMIN] },
     ],
   },
