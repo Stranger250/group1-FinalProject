@@ -34,7 +34,10 @@ const MENU: MenuGroup[] = [
   {
     title: 'AI 助手',
     icon: 'ChatDotRound',
-    children: [{ title: '智能问答', path: '/ai/assistant', icon: 'MagicStick' }],
+    children: [
+      { title: '智能问答', path: '/ai/assistant', icon: 'MagicStick' },
+      { title: '法规文档库', path: '/documents', icon: 'Collection' },
+    ],
   },
   {
     title: '考试工坊 · 管理',

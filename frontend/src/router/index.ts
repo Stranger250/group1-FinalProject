@@ -30,6 +30,9 @@ const routes: RouteRecordRaw[] = [
       // 模块二 AI 助手
       { path: 'ai/assistant', name: 'AiAssistant', component: () => import('@/views/ai/AiAssistant.vue'), meta: { title: 'AI 助手' } },
 
+      // O10 法规文档库（全角色可浏览；管理端含上传/停用/删除）
+      { path: 'documents', name: 'DocLibrary', component: () => import('@/views/document/DocLibrary.vue'), meta: { title: '法规文档库' } },
+
       // O8 用户端考试工坊
       { path: 'exam/workshop', name: 'ExamWorkshop', component: () => import('@/views/exam/ExamWorkshop.vue'), meta: { title: '考试工坊' } },
 
