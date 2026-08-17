@@ -4,10 +4,12 @@
 """
 from __future__ import annotations
 
+import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 已知的公开占位密钥（源码默认值 / .env.example 示例）。命中任一即视为未配置，
@@ -64,8 +66,13 @@ class Settings(BaseSettings):
     vision_api_key: str = ""
     vision_model_name: str = ""
     # 图片上传（B03）：本地磁盘存储，经 main.py 挂载的 /uploads 静态访问；
-    # 目录在 backend/data/uploads（已 gitignore），按日期分子目录防单目录文件过多
-    upload_dir: str = str(Path(__file__).resolve().parents[2] / "data" / "uploads")
+    # 目录在 backend/data/uploads（已 gitignore），按日期分子目录防单目录文件过多；
+    # 容器部署用 UPLOAD_DIR 环境变量指定（compose 挂载 /data/uploads 持久卷，修复重启后图片丢失 B1）
+    upload_dir: str = Field(
+        default_factory=lambda: os.environ.get(
+            "UPLOAD_DIR", str(Path(__file__).resolve().parents[2] / "data" / "uploads")
+        )
+    )
     max_upload_mb: float = 5.0          # 单文件大小上限（PRD B03）
     hazard_no_prefix: str = "HZ"        # 隐患编号前缀，如 HZ20260813-0001
     # AI 出题参考文档文本截断上限（E02：上传培训手册/制度文件限定出题范围，纯文本不落盘）

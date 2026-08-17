@@ -20,6 +20,9 @@
         <span>等级：{{ hazardLevelMeta(analysis.level_suggest).label }} · 类型：{{ analysis.type_suggest || '未识别' }} · 置信度：{{ percent(analysis.confidence) }}</span>
         <el-button size="small" text type="primary" @click="clearAnalysis">清除回填</el-button>
       </div>
+      <div class="prefill-body keep-row">
+        <el-checkbox v-model="keepRiskReport">保留 AI 识别结果（标注图与检测明细随上报保存；不勾选则仅保留原图）</el-checkbox>
+      </div>
     </el-alert>
 
     <el-card shadow="never">
@@ -119,6 +122,9 @@ if (userStore.user?.name) form.reporter_name = userStore.user.name
 /** 「AI 分析」页带回的识别结果（回填表单 + 随上报落 risk_report） */
 const analysis = ref<AnalyzeResult | null>(null)
 
+/** 是否保留 AI 识别结果（B1：勾选保留 → risk_report 落库含 kept=true；不勾选 → 仅原图，risk_report=null） */
+const keepRiskReport = ref(true)
+
 const rules: FormRules = {
   description: [
     { required: true, message: '请填写隐患描述', trigger: 'blur' },
@@ -143,6 +149,7 @@ onMounted(() => {
 /** 清除回填：仅清除提示与 risk_report 附带的识别信息，不重置已填表单 */
 function clearAnalysis() {
   analysis.value = null
+  keepRiskReport.value = true
 }
 
 // ---------- 提交 ----------
@@ -165,7 +172,10 @@ async function onSubmit() {
       type: form.type || undefined,
       reporter_name: form.reporter_name.trim() || undefined,
       images: form.images,
-      risk_report: analysis.value ? { ...analysis.value } : null,
+      risk_report:
+        analysis.value && keepRiskReport.value
+          ? { ...analysis.value, kept: true }
+          : null,
     }
     const detail = await createHazard(payload)
     ElMessage.success('隐患上报成功')
@@ -186,6 +196,7 @@ function resetAll() {
   form.reporter_name = userStore.user?.name ?? ''
   form.images = []
   analysis.value = null
+  keepRiskReport.value = true
   formRef.value?.clearValidate()
 }
 </script>

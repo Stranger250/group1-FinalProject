@@ -142,12 +142,18 @@
         </el-col>
       </el-row>
 
-      <!-- risk_report 结构化展示（AI 识别建议 + 检测明细 + 标注图） -->
+      <!-- risk_report 结构化展示（AI 识别建议 + 检测明细 + 标注图；B1：按 kept 区分展示） -->
       <el-card v-if="riskResult" shadow="never" class="block-card risk-card">
         <template #header>
           <span class="block-title">识别报告</span>
         </template>
         <AiAnalyzePanel :result="riskResult" :actionable="false" />
+      </el-card>
+      <el-card v-else-if="hasRiskReportField" shadow="never" class="block-card risk-card">
+        <template #header>
+          <span class="block-title">识别报告</span>
+        </template>
+        <el-empty :image-size="56" description="未保留 AI 识别结果（仅原图）" />
       </el-card>
     </template>
 
@@ -424,13 +430,20 @@ function imageIndex(id: number): number {
   return detail.value?.images.findIndex((i) => i.id === id) ?? 0
 }
 
-/** risk_report → AnalyzeResult 兼容结构（仅当含 type_suggest / detections 时展示） */
+/** risk_report → AnalyzeResult 兼容结构（仅当含 type_suggest / detections 时展示；kept=false 视为未保留） */
 const riskResult = computed<AnalyzeResult | null>(() => {
   const rr = detail.value?.risk_report
   if (!rr || typeof rr !== 'object') return null
-  const r = rr as unknown as AnalyzeResult
+  const r = rr as unknown as AnalyzeResult & { kept?: boolean }
+  if (r.kept === false) return null // 明确不保留：仅原图
   if (r.type_suggest || (Array.isArray(r.detections) && r.detections.length)) return r
   return null
+})
+
+/** risk_report 字段存在（含 kept=false / 空结构）→ 展示「未保留 AI 识别」提示而非整卡隐藏 */
+const hasRiskReportField = computed(() => {
+  const rr = detail.value?.risk_report
+  return !!rr && typeof rr === 'object' && Object.keys(rr as object).length > 0
 })
 
 async function load() {

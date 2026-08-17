@@ -69,10 +69,17 @@ app = FastAPI(
 )
 
 # 隐患图片上传目录（B03）：目录不存在则先创建（StaticFiles 要求目录已存在），
-# 目录本身在 backend/data/uploads（.gitignore，构建产物不入库）
+# 目录本身在 backend/data/uploads（.gitignore，构建产物不入库）；
+# 容器版经 UPLOAD_DIR 指向 /data/uploads 持久卷（B1：重启后图片不丢失）
 _upload_dir = Path(get_settings().upload_dir)
 _upload_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(_upload_dir)), name="uploads")
+# B1 重启自检：记录 uploads 目录内文件数（容器版验证持久卷挂载生效）
+try:
+    _upload_file_count = sum(1 for _ in _upload_dir.rglob("*") if _.is_file())
+    logger.info("uploads 目录自检: %s（文件数 %d）", _upload_dir, _upload_file_count)
+except OSError as _e:  # pragma: no cover
+    logger.warning("uploads 目录自检失败: %s", _e)
 
 # 开发环境放开跨域；生产按 ARCHITECTURE §10 收紧
 app.add_middleware(

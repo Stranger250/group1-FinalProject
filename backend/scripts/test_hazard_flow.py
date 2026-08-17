@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from datetime import datetime, timedelta
@@ -16,7 +17,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import httpx
 
-BASE = "http://127.0.0.1:8000/api/v1"
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000/api/v1")
+ROOT = os.environ.get("ROOT_URL", BASE.removesuffix("/api/v1"))
 PASS = 0
 FAIL = 0
 FAILURES: list[str] = []
@@ -42,7 +44,7 @@ def main() -> None:
     ts = datetime.now().strftime("%H%M%S")
     for i in range(6):
         try:
-            if httpx.get("http://127.0.0.1:8000/", timeout=10).status_code == 200:
+            if httpx.get(ROOT + "/", timeout=10).status_code == 200:
                 break
         except httpx.HTTPError:
             time.sleep(2)
