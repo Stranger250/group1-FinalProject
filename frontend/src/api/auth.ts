@@ -46,3 +46,12 @@ export function uploadAvatarApi(file: File) {
   form.append('file', file)
   return request<UserInfo>({ url: '/auth/avatar', method: 'POST', data: form, timeout: 30_000 })
 }
+
+/** 忘记密码：请求重置为默认密码 123456（公开接口） */
+export function forgotPassword(username: string) {
+  return request<{ username: string; new_password: string }>({
+    url: '/auth/forgot-password',
+    method: 'POST',
+    data: { username },
+  })
+}

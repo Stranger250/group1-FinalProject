@@ -1,5 +1,5 @@
-<!-- H03 隐患详情（P04）：全字段 + 图片预览 + 处理进度时间线 + risk_report 结构化展示
-     （AI 识别建议/检测明细/标注图）+ 闭环按钮（SAFETY/ADMIN 且 WAIT_PROCESS 双门控）。 -->
+<!-- H03-H06 隐患详情（P04）：全字段 + 图片 + 时间线 + AI 识别报告
+     处理操作（SAFETY/ADMIN + 状态门控）：派单（WAIT_PROCESS）/ 整改（PROCESSING）/ 验收（WAIT_CHECK）/ 一键闭环（WAIT_PROCESS）。 -->
 <template>
   <div class="hazard-detail">
     <div v-if="loading" v-loading="true" class="detail-loading" />
@@ -14,6 +14,37 @@
         </div>
         <div class="head-actions">
           <el-button :icon="'Back'" @click="router.back()">返回列表</el-button>
+          <!-- H04 派单：待处理 + 管理角色 -->
+          <el-button
+            v-if="canDispatch"
+            type="primary"
+            :icon="'User'"
+            :loading="acting"
+            @click="openDispatch"
+          >
+            派单
+          </el-button>
+          <!-- H05 整改：处理中 + 负责人或管理角色 -->
+          <el-button
+            v-if="canRectify"
+            type="primary"
+            :icon="'EditPen'"
+            :loading="acting"
+            @click="openRectify"
+          >
+            整改
+          </el-button>
+          <!-- H06 验收：待验收 + 管理角色 -->
+          <el-button
+            v-if="canCheck"
+            type="warning"
+            :icon="'Stamp'"
+            :loading="acting"
+            @click="openCheck"
+          >
+            验收
+          </el-button>
+          <!-- H03 一键闭环：待处理 + 管理角色 -->
           <el-button
             v-if="canClose"
             type="danger"
@@ -125,6 +156,101 @@
         <el-button type="primary" @click="router.push('/hazards')">返回列表</el-button>
       </template>
     </el-result>
+
+    <!-- H04 派单弹窗 -->
+    <el-dialog v-model="dispatchVisible" title="派单处理" width="460px" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="整改负责人" required>
+          <el-select
+            v-model="dispatchForm.handler_id"
+            placeholder="选择整改负责人"
+            filterable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="u in employeeOptions"
+              :key="u.id"
+              :label="`${u.name}（${u.username}）`"
+              :value="u.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="整改期限">
+          <el-date-picker
+            v-model="dispatchForm.deadline"
+            type="datetime"
+            placeholder="选填，不设期限"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dispatchVisible = false">取消</el-button>
+        <el-button type="primary" :loading="acting" :disabled="!dispatchForm.handler_id" @click="onDispatch">
+          确认派单
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- H05 整改弹窗 -->
+    <el-dialog v-model="rectifyVisible" title="提交整改" width="520px" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="整改措施" required>
+          <el-input
+            v-model="rectifyForm.rectification_measure"
+            type="textarea"
+            :rows="4"
+            maxlength="2000"
+            show-word-limit
+            placeholder="描述已采取的整改措施"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rectifyVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="acting"
+          :disabled="!rectifyForm.rectification_measure.trim()"
+          @click="onRectify"
+        >
+          提交整改
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- H06 验收弹窗 -->
+    <el-dialog v-model="checkVisible" title="验收" width="460px" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="验收结论">
+          <el-radio-group v-model="checkForm.passed">
+            <el-radio :value="true">通过并闭环</el-radio>
+            <el-radio :value="false">驳回</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="!checkForm.passed" label="驳回原因" required>
+          <el-input
+            v-model="checkForm.reject_reason"
+            type="textarea"
+            :rows="3"
+            maxlength="255"
+            show-word-limit
+            placeholder="驳回必须填写原因"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="checkVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="acting"
+          :disabled="!checkForm.passed && !checkForm.reject_reason?.trim()"
+          @click="onCheck"
+        >
+          确认
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -132,7 +258,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { closeHazard, getHazard } from '@/api/hazard'
+import { checkHazard, closeHazard, dispatchHazard, getHazard, rectifyHazard } from '@/api/hazard'
 import type { AnalyzeResult, HazardDetail as HazardDetailModel, HazardLevel, HazardStatus } from '@/types/models/hazard'
 import { hazardLevelMeta, hazardStatusMeta } from '@/utils/constants'
 import { formatDateTime } from '@/utils/format'
@@ -145,12 +271,130 @@ const userStore = useUserStore()
 
 const loading = ref(true)
 const closing = ref(false)
+const acting = ref(false)
 const error = ref(false)
 const detail = ref<HazardDetailModel | null>(null)
+
+/** 管理角色（SAFETY=2 / ADMIN=3） */
+const isManager = computed(() => userStore.roleId === 2 || userStore.roleId === 3)
+
+/** 操作门控（状态机 + 角色） */
+const canDispatch = computed(
+  () => isManager.value && detail.value?.status === 'WAIT_PROCESS',
+)
+const canRectify = computed(
+  () => (isManager.value || detail.value?.handler_id === userStore.user?.id)
+    && detail.value?.status === 'PROCESSING',
+)
+const canCheck = computed(
+  () => isManager.value && detail.value?.status === 'WAIT_CHECK',
+)
+/** 闭环门控：SAFETY(2)/ADMIN(3) 且状态为 WAIT_PROCESS */
+const canClose = computed(
+  () => isManager.value && detail.value?.status === 'WAIT_PROCESS',
+)
+
+// ---- 派单 ----
+const dispatchVisible = ref(false)
+const dispatchForm = ref<{ handler_id: number | null; deadline: string | null }>({ handler_id: null, deadline: null })
+const employeeOptions = ref<{ id: number; name: string; username: string }[]>([])
+
+async function loadEmployees() {
+  try {
+    const { listUsers } = await import('@/api/user')
+    const data = await listUsers({ role_id: 1, page_size: 100 })
+    employeeOptions.value = (data.items ?? []).map((u) => ({
+      id: u.id, name: u.name, username: u.username,
+    }))
+  } catch {
+    employeeOptions.value = []
+  }
+}
+
+function openDispatch() {
+  dispatchForm.value = { handler_id: null, deadline: null }
+  dispatchVisible.value = true
+  void loadEmployees()
+}
+
+async function onDispatch() {
+  if (!dispatchForm.value.handler_id) return
+  acting.value = true
+  try {
+    const res = await dispatchHazard(detail.value!.id, {
+      handler_id: dispatchForm.value.handler_id,
+      deadline: dispatchForm.value.deadline || null,
+    })
+    ElMessage.success(res.message)
+    dispatchVisible.value = false
+    await load()
+  } catch {
+    /* 全局提示 */
+  } finally {
+    acting.value = false
+  }
+}
+
+// ---- 整改 ----
+const rectifyVisible = ref(false)
+const rectifyForm = ref<{ rectification_measure: string }>({ rectification_measure: '' })
+
+function openRectify() {
+  rectifyForm.value = { rectification_measure: '' }
+  rectifyVisible.value = true
+}
+
+async function onRectify() {
+  if (!rectifyForm.value.rectification_measure.trim()) return
+  acting.value = true
+  try {
+    const res = await rectifyHazard(detail.value!.id, {
+      rectification_measure: rectifyForm.value.rectification_measure.trim(),
+    })
+    ElMessage.success(res.message)
+    rectifyVisible.value = false
+    await load()
+  } catch {
+    /* 全局提示 */
+  } finally {
+    acting.value = false
+  }
+}
+
+// ---- 验收 ----
+const checkVisible = ref(false)
+const checkForm = ref<{ passed: boolean; reject_reason: string | null }>({ passed: true, reject_reason: null })
+
+function openCheck() {
+  checkForm.value = { passed: true, reject_reason: null }
+  checkVisible.value = true
+}
+
+async function onCheck() {
+  if (!checkForm.value.passed && !checkForm.value.reject_reason?.trim()) return
+  acting.value = true
+  try {
+    const res = await checkHazard(detail.value!.id, {
+      passed: checkForm.value.passed,
+      reject_reason: checkForm.value.passed ? null : checkForm.value.reject_reason?.trim() || null,
+    })
+    ElMessage.success(res.message)
+    checkVisible.value = false
+    await load()
+  } catch {
+    /* 全局提示 */
+  } finally {
+    acting.value = false
+  }
+}
 
 /** 操作码 → 中文（后端存中文，兜底映射常见代码） */
 const OP_LABEL: Record<string, string> = {
   SUBMIT: '提交上报',
+  DISPATCH: '派单',
+  RECTIFY: '整改',
+  ACCEPT: '验收',
+  REJECT: '驳回',
   CLOSE: '闭环确认',
 }
 
@@ -158,10 +402,10 @@ function opLabel(op: string): string {
   return OP_LABEL[op] ?? op
 }
 
-/** 时间线节点颜色（提交绿 / 闭环红） */
+/** 时间线节点颜色（提交绿 / 驳回红 / 其余黛青） */
 function timelineType(op: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
   if (op === 'SUBMIT' || op === '提交') return 'success'
-  if (op === 'CLOSE' || op === '闭环') return 'danger'
+  if (op === 'CLOSE' || op === '闭环' || op === 'REJECT' || op === '驳回') return 'danger'
   return 'primary'
 }
 
@@ -187,11 +431,6 @@ const riskResult = computed<AnalyzeResult | null>(() => {
   if (r.type_suggest || (Array.isArray(r.detections) && r.detections.length)) return r
   return null
 })
-
-/** 闭环门控：SAFETY(2)/ADMIN(3) 且状态为 WAIT_PROCESS */
-const canClose = computed(
-  () => (userStore.roleId === 2 || userStore.roleId === 3) && detail.value?.status === 'WAIT_PROCESS',
-)
 
 async function load() {
   loading.value = true

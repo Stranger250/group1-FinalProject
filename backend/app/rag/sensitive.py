@@ -5,12 +5,14 @@ MVP 用包含检查（词库小）；词库扩大后可换 DFA。返回命中的
 """
 from __future__ import annotations
 
+import os
 import threading
 from functools import lru_cache
 from pathlib import Path
 
-# backend/data/sensitive_words.txt：config.py 位于 backend/app/core，父级两级 = backend
-_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# backend/data/sensitive_words.txt：config.py 位于 backend/app/core，父级两级 = backend；
+# 容器部署时用环境变量 DATA_DIR 指定（compose 挂载 /data），兼容两种环境。
+_DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).resolve().parents[2] / "data")))
 _SENSITIVE_FILE = _DATA_DIR / "sensitive_words.txt"
 
 

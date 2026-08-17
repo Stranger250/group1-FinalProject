@@ -59,3 +59,30 @@ export function closeHazard(id: number) {
     method: 'POST',
   })
 }
+
+/** H04 派单：指定整改负责人与期限（SAFETY/ADMIN） */
+export function dispatchHazard(id: number, payload: { handler_id: number; deadline?: string | null }) {
+  return request<{ message: string; hazard_no: string; status: string }>({
+    url: `/hazards/${id}/dispatch`,
+    method: 'POST',
+    data: payload,
+  })
+}
+
+/** H05 整改反馈：提交整改措施与照片（负责人或 SAFETY/ADMIN） */
+export function rectifyHazard(id: number, payload: { rectification_measure: string; rectification_images?: string[] }) {
+  return request<{ message: string; hazard_no: string; status: string }>({
+    url: `/hazards/${id}/rectify`,
+    method: 'POST',
+    data: payload,
+  })
+}
+
+/** H06 验收：通过闭环 / 驳回（SAFETY/ADMIN） */
+export function checkHazard(id: number, payload: { passed: boolean; reject_reason?: string | null }) {
+  return request<{ message: string; hazard_no: string; status: string }>({
+    url: `/hazards/${id}/check`,
+    method: 'POST',
+    data: payload,
+  })
+}

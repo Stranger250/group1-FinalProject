@@ -27,14 +27,15 @@ services:
       VISION_API_KEY: ${VISION_API_KEY:-}
       VISION_MODEL_NAME: ${VISION_MODEL_NAME:-}
       # 本地模型与知识库（卷挂载，镜像内不打包）
+      DATA_DIR: /data
       EMBED_MODEL_DIR: /models/bge-large-zh
       RERANK_MODEL_DIR: /models/bge-reranker-base
       CHROMA_PERSIST_DIR: /data/chroma_kb
       UPLOAD_DIR: /data/uploads
     volumes:
-      - ./data/chroma_kb:/data/chroma_kb
-      - ./data/uploads:/data/uploads
+      - ./data:/data                     # 知识库/上传/敏感词/快捷提问/反例库（全量 data 挂载）
       - ${MODEL_DIR:-D:/code/2026/7_8月实训}:/models:ro
+      - ../crawler_output:/crawler_output:ro   # E02 出题法规语料（law_json_dir）
     ports:
       - "8002:8000"
     extra_hosts:

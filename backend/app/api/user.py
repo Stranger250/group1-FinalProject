@@ -48,7 +48,7 @@ def update_user(
     return resp(AdminUserService.update(db, user, uid, **payload.model_dump()))
 
 
-@router.post("/{uid}/reset-password", summary="重置用户密码（ADMIN，返回一次性临时密码）")
+@router.post("/{uid}/reset-password", summary="重置用户密码（ADMIN，重置为默认 123456）")
 def reset_password(
     uid: int,
     user: User = Depends(_ADMIN),

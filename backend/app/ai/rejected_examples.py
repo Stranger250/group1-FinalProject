@@ -18,8 +18,10 @@ from pathlib import Path
 
 logger = logging.getLogger("gen_service.rejected")
 
-# backend/data/rejected_examples.json：config.py 位于 backend/app/core，父级两级 = backend
-_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# backend/data/rejected_examples.json：config.py 位于 backend/app/core，父级两级 = backend；
+# 容器部署用 DATA_DIR 环境变量指定（compose 挂载 /data）
+import os as _os
+_DATA_DIR = Path(_os.environ.get("DATA_DIR", str(Path(__file__).resolve().parents[2] / "data")))
 _REJECTED_FILE = _DATA_DIR / "rejected_examples.json"
 
 # 反例库上限：超出截断（保留最近 _MAX_EXAMPLES 条）

@@ -27,6 +27,12 @@ class RegisterIn(BaseModel):
         return _validate_password_bytes(v)
 
 
+class ForgotPasswordIn(BaseModel):
+    """忘记密码请求：仅需用户名（重置为默认密码 123456）。"""
+
+    username: str = Field(min_length=3, max_length=64, examples=["zhangsan"])
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

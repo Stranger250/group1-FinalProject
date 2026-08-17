@@ -9,12 +9,22 @@ from ..core.config import get_settings
 from ..core.database import get_db
 from ..core.security import get_current_user
 from ..model.user import User
-from ..schema.auth import ChangePasswordIn, ProfileUpdateIn, RegisterIn
+from ..schema.auth import ChangePasswordIn, ForgotPasswordIn, ProfileUpdateIn, RegisterIn
 from ..service.auth_service import AuthService
+from ..service.user_service import AdminUserService
 from ..utils.response import resp
 from ..utils.upload import save_image_upload
 
 router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
+
+
+@router.post("/forgot-password", summary="忘记密码：请求重置为默认密码 123456（公开）")
+def forgot_password(payload: ForgotPasswordIn, db: Session = Depends(get_db)):
+    """登录页「忘记密码」入口：将账号密码重置为默认 123456 并留痕审计。
+
+    实训口径：账号不存在/已禁用统一 404 同文案（防账号枚举）。
+    """
+    return resp(AdminUserService.request_reset(db, payload.username.strip()))
 
 
 @router.post("/register", summary="注册（普通用户）")

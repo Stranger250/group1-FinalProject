@@ -43,10 +43,28 @@
         <div class="login-footer">
           <span>还没有账号？</span>
           <el-link type="primary" @click="registerVisible = true">立即注册</el-link>
+          <span class="footer-sep">|</span>
+          <el-link type="primary" @click="forgotVisible = true">忘记密码</el-link>
         </div>
       </div>
       <div class="panel-foot">蜀道集团 · 安全生产数字化平台</div>
     </div>
+
+    <!-- 忘记密码：请求重置 -->
+    <el-dialog v-model="forgotVisible" title="忘记密码" width="400px" append-to-body>
+      <el-alert type="info" :closable="false" class="forgot-tip">
+        输入用户名后，密码将重置为默认密码 <b>123456</b>，请登录后尽快修改。
+      </el-alert>
+      <el-form ref="forgotFormRef" :model="forgotForm" :rules="forgotRules" label-width="72px" style="margin-top: 14px">
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="forgotForm.username" placeholder="请输入用户名" clearable />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="forgotVisible = false">取消</el-button>
+        <el-button type="primary" :loading="forgotLoading" @click="onForgot">重置密码</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="registerVisible" title="注册账号" width="420px" append-to-body>
       <el-form ref="registerFormRef" :model="registerForm" :rules="registerRules" label-width="72px">
@@ -80,6 +98,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import { forgotPassword } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -87,9 +106,20 @@ const userStore = useUserStore()
 
 const loginFormRef = ref<FormInstance>()
 const registerFormRef = ref<FormInstance>()
+const forgotFormRef = ref<FormInstance>()
 const loading = ref(false)
 const registerVisible = ref(false)
 const registerLoading = ref(false)
+const forgotVisible = ref(false)
+const forgotLoading = ref(false)
+
+const forgotForm = reactive({ username: '' })
+const forgotRules: FormRules = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, max: 64, message: '用户名长度 3-64 位', trigger: 'blur' },
+  ],
+}
 
 const loginForm = reactive({ username: '', password: '' })
 const loginRules: FormRules = {
@@ -152,6 +182,23 @@ async function onRegister() {
     registerFormRef.value?.resetFields()
   } finally {
     registerLoading.value = false
+  }
+}
+
+async function onForgot() {
+  const ok = await forgotFormRef.value?.validate().catch(() => false)
+  if (!ok) return
+  forgotLoading.value = true
+  try {
+    const data = await forgotPassword(forgotForm.username.trim())
+    ElMessage.success(`密码已重置为 ${data.new_password}，请登录后尽快修改`)
+    loginForm.username = forgotForm.username
+    forgotVisible.value = false
+    forgotFormRef.value?.resetFields()
+  } catch {
+    // 后端已全局提示（账号不存在/已禁用统一文案）
+  } finally {
+    forgotLoading.value = false
   }
 }
 </script>
@@ -298,6 +345,13 @@ async function onRegister() {
   text-align: center;
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+.footer-sep {
+  margin: 0 8px;
+  color: var(--el-border-color);
+}
+.forgot-tip {
+  line-height: 1.7;
 }
 .panel-foot {
   position: absolute;
