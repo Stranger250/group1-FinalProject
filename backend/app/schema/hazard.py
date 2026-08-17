@@ -79,3 +79,15 @@ class HazardCheckIn(BaseModel):
 
     passed: bool
     reject_reason: str | None = Field(default=None, max_length=255)
+
+
+class HazardAuditIn(BaseModel):
+    """O13 安全员隐患处理请求体（模拟实现）：标记已处理/驳回 + 处理意见。
+
+    passed=True 标记已处理；passed=False 需填 comment（400 拦截无意见驳回）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    passed: bool
+    comment: str | None = Field(default=None, max_length=255)

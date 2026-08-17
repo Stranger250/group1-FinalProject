@@ -54,6 +54,16 @@
           >
             闭环
           </el-button>
+          <!-- O13 安全员隐患处理（模拟实现）：待处理 + 管理角色 -->
+          <el-button
+            v-if="canAudit"
+            type="success"
+            :icon="'Stamp'"
+            :loading="acting"
+            @click="openAudit"
+          >
+            处理
+          </el-button>
         </div>
       </div>
 
@@ -78,6 +88,13 @@
               <el-descriptions-item label="现场上报人">{{ detail.reporter_name || detail.creator_name }}</el-descriptions-item>
               <el-descriptions-item label="上报时间">{{ formatDateTime(detail.create_time) }}</el-descriptions-item>
               <el-descriptions-item label="更新时间">{{ formatDateTime(detail.update_time) }}</el-descriptions-item>
+              <el-descriptions-item label="处理状态">
+                <el-tag :type="auditMeta(detail.audit_status).tag" size="small">
+                  {{ auditMeta(detail.audit_status).label }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="处理时间">{{ formatDateTime(detail.audit_at) }}</el-descriptions-item>
+              <el-descriptions-item label="处理意见">{{ detail.audit_comment || '—' }}</el-descriptions-item>
               <el-descriptions-item label="处理期限" :span="2">{{ formatDateTime(detail.deadline) }}</el-descriptions-item>
               <el-descriptions-item label="整改措施" :span="2">
                 {{ detail.rectification_measure || '未填写' }}
@@ -163,6 +180,39 @@
         <el-button type="primary" @click="router.push('/hazards')">返回列表</el-button>
       </template>
     </el-result>
+
+    <!-- O13 隐患处理弹窗（模拟实现） -->
+    <el-dialog v-model="auditVisible" :title="auditPassed ? '标记已处理' : '驳回隐患'" width="460px" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="处理方式">
+          <el-radio-group v-model="auditPassed">
+            <el-radio :value="true">标记已处理</el-radio>
+            <el-radio :value="false">驳回</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="auditPassed ? '处理意见' : '驳回意见'" :required="!auditPassed">
+          <el-input
+            v-model="auditComment"
+            type="textarea"
+            :rows="3"
+            maxlength="255"
+            show-word-limit
+            :placeholder="auditPassed ? '选填：处理说明' : '请填写驳回原因（上报人可见）'"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="auditVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="acting"
+          :disabled="!auditPassed && !auditComment.trim()"
+          @click="submitAudit"
+        >
+          确认{{ auditPassed ? '处理' : '驳回' }}
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- H04 派单弹窗 -->
     <el-dialog v-model="dispatchVisible" title="派单处理" width="460px" append-to-body>
@@ -300,6 +350,49 @@ const canCheck = computed(
 const canClose = computed(
   () => isManager.value && detail.value?.status === 'WAIT_PROCESS',
 )
+
+/** O13 隐患处理门控：SAFETY(2)/ADMIN(3) 且处理状态为 pending */
+const canAudit = computed(
+  () => isManager.value && detail.value?.audit_status === 'pending',
+)
+
+const AUDIT_META: Record<string, { label: string; tag: 'info' | 'success' | 'danger' }> = {
+  pending: { label: '待处理', tag: 'info' },
+  approved: { label: '已处理', tag: 'success' },
+  rejected: { label: '已驳回', tag: 'danger' },
+}
+function auditMeta(v: string | undefined) {
+  return AUDIT_META[v ?? 'pending'] ?? AUDIT_META.pending
+}
+
+// ---- O13 隐患处理（模拟实现） ----
+const auditVisible = ref(false)
+const auditPassed = ref(true)
+const auditComment = ref('')
+
+function openAudit() {
+  auditPassed.value = true
+  auditComment.value = ''
+  auditVisible.value = true
+}
+
+async function submitAudit() {
+  acting.value = true
+  try {
+    const { auditHazard } = await import('@/api/hazard')
+    const res = await auditHazard(detail.value!.id, {
+      passed: auditPassed.value,
+      comment: auditComment.value.trim() || null,
+    })
+    ElMessage.success(res.message)
+    auditVisible.value = false
+    await load()
+  } catch {
+    // 错误已由 request 层统一提示
+  } finally {
+    acting.value = false
+  }
+}
 
 // ---- 派单 ----
 const dispatchVisible = ref(false)

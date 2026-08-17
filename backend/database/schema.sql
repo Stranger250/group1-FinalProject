@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS hazard (
   rectification_images  TEXT         NULL,
   reject_reason         VARCHAR(255) NULL,
   risk_report           JSON         NULL,
+  audit_status          VARCHAR(16)  NOT NULL DEFAULT 'pending' COMMENT 'O13 处理状态：pending/approved/rejected',
+  audit_by              BIGINT       NULL COMMENT 'O13 处理人 user.id',
+  audit_at              DATETIME     NULL COMMENT 'O13 处理时间',
+  audit_comment         VARCHAR(255) NULL COMMENT 'O13 处理意见',
   create_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_hazard_no (hazard_no),
@@ -61,7 +65,8 @@ CREATE TABLE IF NOT EXISTS hazard (
   KEY idx_level (level),
   KEY idx_creator (creator_id),
   KEY idx_handler (handler_id),
-  KEY idx_create_time (create_time)
+  KEY idx_create_time (create_time),
+  KEY idx_audit_status (audit_status)
 ) ENGINE = InnoDB;
 
 -- 隐患图片表

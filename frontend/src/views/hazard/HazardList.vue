@@ -81,6 +81,11 @@
             <el-tag :type="statusMeta(row.status).tag">{{ statusMeta(row.status).label }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="处理状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="auditMeta(row.audit_status).tag" size="small">{{ auditMeta(row.audit_status).label }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="creator_name" label="上报人" width="110" show-overflow-tooltip />
         <el-table-column prop="reporter_name" label="现场上报人" width="120" show-overflow-tooltip />
         <el-table-column prop="image_count" label="图片" width="80" align="center">
@@ -160,6 +165,16 @@ function levelMeta(v: HazardLevel) {
 
 function statusMeta(v: HazardStatus) {
   return hazardStatusMeta(v)
+}
+
+/** O13 处理状态展示 */
+const AUDIT_META: Record<string, { label: string; tag: 'info' | 'success' | 'danger' }> = {
+  pending: { label: '待处理', tag: 'info' },
+  approved: { label: '已处理', tag: 'success' },
+  rejected: { label: '已驳回', tag: 'danger' },
+}
+function auditMeta(v: string | undefined) {
+  return AUDIT_META[v ?? 'pending'] ?? AUDIT_META.pending
 }
 
 function onSearch() {

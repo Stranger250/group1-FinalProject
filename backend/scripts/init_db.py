@@ -245,6 +245,33 @@ def _migrate_hazard_reporter(cur, db: str) -> bool:
     return False
 
 
+def _migrate_hazard_audit(cur, db: str) -> bool:
+    """O13 安全员隐患处理迁移（幂等）：hazard 表补 audit_status/audit_by/audit_at/audit_comment 四列。
+
+    语义：audit_status 默认 pending（待处理）；处理人/时间/意见由安全员模拟处理时写入。
+    """
+    cur.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='hazard'",
+        (db,),
+    )
+    cols = {row[0] for row in cur.fetchall()}
+    adds = []
+    if "audit_status" not in cols:
+        adds.append("ADD COLUMN audit_status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '处理状态 pending/approved/rejected'")
+        adds.append("ADD KEY idx_audit_status (audit_status)")
+    if "audit_by" not in cols:
+        adds.append("ADD COLUMN audit_by BIGINT NULL COMMENT '处理人 user.id'")
+    if "audit_at" not in cols:
+        adds.append("ADD COLUMN audit_at DATETIME NULL COMMENT '处理时间'")
+    if "audit_comment" not in cols:
+        adds.append("ADD COLUMN audit_comment VARCHAR(255) NULL COMMENT '处理意见'")
+    if adds:
+        cur.execute("ALTER TABLE hazard " + ", ".join(adds))
+        return True
+    return False
+
+
 def _migrate_ai_chat(cur, db: str) -> bool:
     """模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 点赞/点踩）。
 
@@ -388,6 +415,11 @@ def main() -> None:
         with conn.cursor() as cur:
             if _migrate_hazard_reporter(cur, db):
                 print("[OK] hazard 表迁移：补 reporter_name（现场上报人）")
+
+        # 2.712) O13 安全员隐患处理迁移（幂等）：hazard 表补处理四字段
+        with conn.cursor() as cur:
+            if _migrate_hazard_audit(cur, db):
+                print("[OK] hazard 表迁移：补 audit_status/audit_by/audit_at/audit_comment（安全员隐患处理）")
 
         # 2.8) 模块二 AI 助手迁移（幂等）：message 表补 feedback 列（A07 反馈）
         with conn.cursor() as cur:

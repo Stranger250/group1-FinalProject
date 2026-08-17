@@ -86,3 +86,12 @@ export function checkHazard(id: number, payload: { passed: boolean; reject_reaso
     data: payload,
   })
 }
+
+/** O13 安全员隐患处理（模拟实现）：标记已处理 / 驳回（SAFETY/ADMIN） */
+export function auditHazard(id: number, payload: { passed: boolean; comment?: string | null }) {
+  return request<{ message: string; hazard_no: string; audit_status: string }>({
+    url: `/hazards/${id}/audit`,
+    method: 'POST',
+    data: payload,
+  })
+}

@@ -24,6 +24,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'hazards', name: 'HazardList', component: () => import('@/views/hazard/HazardList.vue'), meta: { title: '隐患列表' } },
       { path: 'hazards/report', name: 'HazardReport', component: () => import('@/views/hazard/HazardReport.vue'), meta: { title: '隐患上报' } },
       { path: 'hazards/analyze', name: 'HazardAnalyze', component: () => import('@/views/hazard/HazardAnalyze.vue'), meta: { title: 'AI 分析' } },
+      { path: 'hazards/audit', name: 'HazardAudit', component: () => import('@/views/hazard/HazardAudit.vue'), meta: { title: '隐患处理', roles: [2, 3] } },
       { path: 'hazards/:id', name: 'HazardDetail', component: () => import('@/views/hazard/HazardDetail.vue'), meta: { title: '隐患详情', hidden: true } },
 
       // 模块二 AI 助手

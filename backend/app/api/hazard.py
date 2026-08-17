@@ -25,7 +25,7 @@ from ..core.config import get_settings
 from ..core.database import get_db  # noqa: F401  # 与 Session 一起构成 get_db 依赖类型标注
 from ..core.security import get_current_user, require_roles
 from ..model.user import RoleId, User
-from ..schema.hazard import HazardCheckIn, HazardCreate, HazardDispatchIn, HazardRectifyIn
+from ..schema.hazard import HazardAuditIn, HazardCheckIn, HazardCreate, HazardDispatchIn, HazardRectifyIn
 from ..service.hazard_service import HazardService
 from ..utils.response import resp
 from ..utils.upload import save_image_upload
@@ -121,7 +121,7 @@ def list_hazards(
     db: Session = Depends(get_db),
 ):
     return resp(HazardService.list_page(
-        db, status_=status_, level=level, type_=type_, keyword=keyword,
+        db, user=user, status_=status_, level=level, type_=type_, keyword=keyword,
         start_time=start_time, end_time=end_time, page=page, page_size=page_size,
         sort=sort, order=order,
     ))
@@ -179,6 +179,17 @@ def check_hazard(
 ):
     """待验收 → 已闭环（通过）或已驳回（不通过需原因），落时间线日志。"""
     return resp(HazardService.check(db, hid, user, **payload.model_dump()))
+
+
+@router.post("/{hid}/audit", summary="O13 安全员隐患处理：标记已处理/驳回（SAFETY/ADMIN，模拟实现）")
+def audit_hazard(
+    hid: int,
+    payload: HazardAuditIn,
+    user: User = Depends(_MANAGE),
+    db: Session = Depends(get_db),
+):
+    """O13 安全员隐患处理（仅模拟实现）：标记 已处理/驳回 + 处理人/时间/意见，落时间线与审计。"""
+    return resp(HazardService.audit(db, hid, user, **payload.model_dump()))
 
 
 # ---------- 文件落盘 ----------

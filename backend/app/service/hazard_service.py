@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from ..core.config import get_settings
 from ..model.hazard import (
     Hazard,
+    HazardAuditStatus,
     HazardImage,
     HazardLevel,
     HazardLogOperation,
@@ -57,10 +58,10 @@ class HazardService:
         # 现场上报人：可代报（填他人姓名）；缺省取当前登录用户姓名
         reporter_name = (payload.reporter_name or "").strip() or user.name
 
-        # hazard_no 唯一键并发冲突 → 回滚重试（当日序号 +1）
+        # hazard_no 唯一键并发冲突 → 回滚重试（当日 max 序号 +1）
         prefix = f"{settings.hazard_no_prefix}{_now().strftime('%Y%m%d')}"
         for attempt in range(5):
-            seq = HazardRepo.count_by_no_prefix(db, prefix) + 1
+            seq = HazardRepo.max_seq_by_prefix(db, prefix) + 1
             try:
                 h = HazardRepo.create(
                     db, commit=False,
@@ -94,6 +95,7 @@ class HazardService:
     def list_page(
         db: Session,
         *,
+        user: User,
         status_: str | None = None,
         level: str | None = None,
         type_: str | None = None,
@@ -105,11 +107,15 @@ class HazardService:
         sort: str = "create_time",  # create_time | level（PRD H02 排序验收）
         order: str = "desc",        # asc | desc
     ) -> dict:
-        """H02 隐患列表（PRD：分页 + 状态/等级/类型/时间区间/关键字筛选 + 排序）。"""
+        """H02 隐患列表（PRD：分页 + 状态/等级/类型/时间区间/关键字筛选 + 排序）。
+
+        O13 数据隔离：普通用户仅见本人上报的隐患；安全员/管理员可见全部。
+        """
+        scope_creator_id = None if user.role_id in (RoleId.SAFETY, RoleId.ADMIN) else user.id
         items, total = HazardRepo.list_page(
             db, status=status_, level=level, type_=type_, keyword=keyword,
             start_time=start_time, end_time=end_time, page=page, page_size=page_size,
-            sort=sort, order=order,
+            sort=sort, order=order, creator_id=scope_creator_id,
         )
         ids = [h.id for h in items]
         names = HazardService._user_names(db, {h.creator_id for h in items})
@@ -123,11 +129,52 @@ class HazardService:
 
     @staticmethod
     def get(db: Session, hid: int, user: User) -> dict:
-        """H03 隐患详情（含图片 + 处理进度时间线）。PRD 透明度设计：登录用户可见全部。"""
+        """H03 隐患详情（含图片 + 处理进度时间线）。
+
+        O13 数据隔离：普通用户仅能访问本人上报的隐患（他人隐患与不存在统一 404 掩码）。
+        """
         h = HazardRepo.get_by_id(db, hid)
         if h is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="隐患不存在")
+        if user.role_id not in (RoleId.SAFETY, RoleId.ADMIN) and h.creator_id != user.id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="隐患不存在")
         return HazardService._detail(db, h, user)
+
+    # ---------- O13 安全员隐患处理（模拟实现） ----------
+
+    @staticmethod
+    def audit(db: Session, hid: int, user: User, *, passed: bool, comment: str | None) -> dict:
+        """O13 安全员隐患处理（仅模拟实现）：标记 已处理/驳回 + 处理人/时间/意见。
+
+        不引入强制状态机流转（不阻塞上报、不触发通知），处理结果落库即可。
+        仅 SAFETY/ADMIN 可操作（api 层 require_roles + 此处纵深防御）。
+        """
+        if user.role_id not in (RoleId.SAFETY, RoleId.ADMIN):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="无权操作")
+        h = HazardRepo.get_by_id(db, hid)
+        if h is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="隐患不存在")
+        if not passed and not (comment or "").strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="驳回必须填写处理意见")
+        from datetime import datetime as _dt
+        h.audit_status = HazardAuditStatus.APPROVED if passed else HazardAuditStatus.REJECTED
+        h.audit_by = user.id
+        h.audit_at = _dt.now()
+        h.audit_comment = (comment or "").strip()
+        HazardRepo.add_log(
+            db, h.id, user.id,
+            HazardLogOperation.ACCEPT if passed else HazardLogOperation.REJECT,
+            old_status=h.status, new_status=h.status,
+            remark="隐患处理：已处理" if passed else f"隐患处理：驳回（{h.audit_comment}）",
+            commit=False,
+        )
+        db.commit()
+        db.refresh(h)
+        from ..utils.audit import write_audit
+        write_audit(db, user, "hazard_audit", target_type="hazard", target_id=hid,
+                    detail=f"hazard_no={h.hazard_no} passed={passed}")
+        return {"message": "已标记处理" if passed else "已驳回",
+                "hazard_no": h.hazard_no, "audit_status": h.audit_status}
 
     # ---------- 管理员一键闭环 ----------
 
@@ -306,6 +353,11 @@ class HazardService:
             "rectification_images": h.rectification_images,
             "reject_reason": h.reject_reason,
             "risk_report": h.risk_report,
+            # O13 处理状态/结果（处理人/时间/意见）
+            "audit_status": h.audit_status,
+            "audit_by": h.audit_by,
+            "audit_at": h.audit_at.isoformat() if h.audit_at else None,
+            "audit_comment": h.audit_comment,
             "images": [
                 {"id": im.id, "image_url": im.image_url,
                  "uploader_id": im.uploader_id,
@@ -341,6 +393,7 @@ class HazardService:
             "creator_id": h.creator_id,
             "creator_name": names.get(h.creator_id, ""),
             "reporter_name": h.reporter_name or names.get(h.creator_id, ""),  # 现场上报人（兼容旧数据）
+            "audit_status": h.audit_status,  # O13 处理状态（列表展示用）
             "image_count": counts.get(h.id, 0),
             "create_time": h.create_time.isoformat() if h.create_time else None,
             "update_time": h.update_time.isoformat() if h.update_time else None,

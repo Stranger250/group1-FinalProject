@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from ..model.hazard import Hazard, HazardImage, HazardLevel, HazardLog
@@ -50,6 +50,20 @@ class HazardRepo:
         return db.scalar(
             select(func.count(Hazard.id)).where(Hazard.hazard_no.like(f"{prefix}%"))
         ) or 0
+
+    @staticmethod
+    def max_seq_by_prefix(db: Session, prefix: str) -> int:
+        """取前缀下最大序号（-0001 段数字）；修复空洞场景下 count+1 撞号问题。
+
+        count+1 在中间序号被删除（测试清理）时会撞上已存在编号；
+        用 MAX(CAST(尾部序号 AS UNSIGNED)) 保证取到真正的下一个序号。
+        """
+        row = db.execute(
+            select(
+                func.max(text("CAST(SUBSTRING_INDEX(hazard_no, '-', -1) AS UNSIGNED)"))
+            ).where(Hazard.hazard_no.like(f"{prefix}%"))
+        ).scalar()
+        return int(row or 0)
 
     @staticmethod
     def list_page(

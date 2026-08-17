@@ -3,6 +3,9 @@
 export type HazardLevel = 'CRITICAL' | 'MAJOR' | 'GENERAL' | 'MINOR'
 export type HazardStatus = 'WAIT_PROCESS' | 'PROCESSING' | 'WAIT_CHECK' | 'FINISHED' | 'REJECTED'
 
+/** O13 安全员隐患处理状态（模拟实现） */
+export type HazardAuditStatus = 'pending' | 'approved' | 'rejected'
+
 /** 归一化 bbox：[x1, y1, x2, y2]，0~1 */
 export type BBox = [number, number, number, number]
 
@@ -52,6 +55,7 @@ export interface HazardItem {
   creator_id: number
   creator_name: string
   reporter_name: string
+  audit_status: HazardAuditStatus
   image_count: number
   create_time: string | null
   update_time: string | null
@@ -76,6 +80,10 @@ export interface HazardDetail {
   rectification_images: string | null
   reject_reason: string | null
   risk_report: Record<string, unknown> | null
+  audit_status: HazardAuditStatus
+  audit_by: number | null
+  audit_at: string | null
+  audit_comment: string | null
   images: HazardImage[]
   timeline: HazardLogItem[]
   create_time: string | null

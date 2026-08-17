@@ -47,6 +47,14 @@ class HazardType:
     OTHER = "其他"
 
 
+class HazardAuditStatus:
+    """隐患处理状态（hazard.audit_status，PRD-V2 O13：安全员隐患处理，模拟实现）。"""
+
+    PENDING = "pending"      # 待处理（上报后初始态）
+    APPROVED = "approved"    # 已处理
+    REJECTED = "rejected"    # 已驳回
+
+
 class HazardLogOperation:
     """处理留痕操作（hazard_log.operation，DATABASE.md §4.4：提交/派单/整改/验收/驳回）。"""
 
@@ -80,6 +88,14 @@ class Hazard(Base):
     rectification_images: Mapped[str | None] = mapped_column(Text)  # 整改后照片 URL（H05 预留）
     reject_reason: Mapped[str | None] = mapped_column(String(255))  # 驳回原因（H06 预留）
     risk_report: Mapped[dict | None] = mapped_column(JSON)  # AI 图片识别报告（标签/置信度/建议）
+    # O13 安全员隐患处理（模拟实现）：处理状态/处理人/处理时间/处理意见
+    audit_status: Mapped[str] = mapped_column(
+        String(16), default=HazardAuditStatus.PENDING,
+        server_default=text("'pending'"), index=True, nullable=False,
+    )
+    audit_by: Mapped[int | None] = mapped_column(BigInteger)  # 处理人 user.id
+    audit_at: Mapped[datetime | None] = mapped_column(DateTime)  # 处理时间
+    audit_comment: Mapped[str | None] = mapped_column(String(255))  # 处理意见
     create_time: Mapped[datetime] = mapped_column(DateTime, index=True, server_default=func.now())
     update_time: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
