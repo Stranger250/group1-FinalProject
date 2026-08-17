@@ -189,8 +189,9 @@ class HybridRetriever:
         pairs = [(cid, self._meta_by_id[cid]["content"]) for cid in pool_ids]
         reranked = get_reranker().rerank(query, pairs, top_n=p.rerank_top_n)
         # O7 国家优先：rerank 分数同级时按层级 bonus 微调顺序（入选集合不变，仅排序）
+        # rerank 返回 (chunk_id, content, score)
         reranked.sort(
-            key=lambda t: t[1] * tier_bonus.get(_tier_of(self._meta_by_id.get(t[0], {})), 1.0),
+            key=lambda t: t[2] * tier_bonus.get(_tier_of(self._meta_by_id.get(t[0], {})), 1.0),
             reverse=True,
         )
         top_ids = [cid for cid, _, _ in reranked]
