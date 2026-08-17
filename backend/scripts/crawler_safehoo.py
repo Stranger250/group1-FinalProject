@@ -90,7 +90,7 @@ _NOISE_RE = re.compile(r"|".join(map(re.escape, _NOISE)))
 _SPLIT_RE = re.compile(r"(第[一二三四五六七八九十百0-9]+[章节部分条]|[一二三四五六七八九十]+、|[（(][一二三四五六七八九十]+[）)])")
 
 
-def fetch(url: str, retries: int = 2) -> str | None:
+def fetch(url: str, retries: int = 1) -> str | None:
     for i in range(retries + 1):
         try:
             r = requests.get(url, headers=UA, timeout=25)
@@ -104,7 +104,7 @@ def fetch(url: str, retries: int = 2) -> str | None:
         except Exception:
             if i == retries:
                 return None
-            time.sleep(2 * (i + 1))
+            time.sleep(1.5 * (i + 1))
     return None
 
 
@@ -204,7 +204,8 @@ def split_into_chapters(paras: list[str]) -> list[dict]:
     return chapters
 
 
-def save_doc(title: str, doc_type: str, category: str, source_url: str, chapters: list[dict]) -> bool:
+def save_doc(title: str, doc_type: str, category: str, source_url: str, chapters: list[dict],
+             source: str = "安全管理网") -> bool:
     if not title or not chapters:
         return False
     # 文件名校验：非法字符替换
@@ -219,7 +220,7 @@ def save_doc(title: str, doc_type: str, category: str, source_url: str, chapters
         "doc_type": doc_type,
         "doc_level": 2,
         "region": "国家",
-        "source": "安全管理网",
+        "source": source,
         "source_url": source_url,
         "publish_date": "",
         "effective_date": "",
@@ -233,6 +234,7 @@ def save_doc(title: str, doc_type: str, category: str, source_url: str, chapters
 def crawl_section(section: str, limit: int, sleep: float) -> int:
     cfg = SECTIONS[section]
     total = 0
+    skipped = 0
     for list_url in cfg["urls"]:
         if limit and total >= limit:
             break
@@ -246,12 +248,17 @@ def crawl_section(section: str, limit: int, sleep: float) -> int:
             if not html:
                 continue
             title, paras = parse_article(html)
+            # 短文章过滤：正文段落 <5 视为会员截断/摘要页，丢弃（safehoo 部分文章仅 VIP 可见全文）
+            if len(paras) < 5:
+                skipped += 1
+                continue
             chapters = split_into_chapters(paras)
             if save_doc(title, cfg["doc_type"], cfg["category"], url, chapters):
                 total += 1
                 arts = sum(len(c["articles"]) for c in chapters)
                 print(f"  ✓ {title[:36]}（{len(chapters)} 章 {arts} 条）")
             time.sleep(sleep)
+    print(f"[{section}] 完成：{total} 篇（跳过短文章 {skipped} 篇）")
     return total
 
 

@@ -25,3 +25,5 @@ backend/logs_*
 .claude/
 施工现场隐患图片/
 docs.zip
+
+crawler_output_generated_backup/
