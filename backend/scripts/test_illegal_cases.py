@@ -278,13 +278,13 @@ def main() -> None:
 
     # ===== J 审核 =====
     section("J · E02 审核")
-    # 手动题审核 → 400
+    # O8 放开来源限制（6ff26e8 起）：AI 生成与手工提交均可审核，此处验证手动题可审核（200）
     r = admin.req("POST", "/questions", json={
         "type": "SINGLE", "content": "手动审核测试题", "options": ["A. 是", "B. 否"],
         "answer": "A", "analysis": "解析", "knowledge_point": "kp", "difficulty": "EASY"})
     manual_qid = r.json()["data"]["id"]
     r = admin.req("POST", f"/ai/questions/{manual_qid}/review", json={"action": "APPROVE"})
-    ok("审核手动题 → 400（仅可审核 AI 生成）", r.status_code == 400, f"got {r.status_code}")
+    ok("审核手动题 → 200（O8 放开来源限制）", r.status_code == 200 and r.json()["code"] == 200, f"got {r.status_code}")
     admin.req("DELETE", f"/questions/{manual_qid}")
     # 找一张 AI PENDING 题：驳回无意见 → 400
     r = admin.req("GET", "/ai/batches")

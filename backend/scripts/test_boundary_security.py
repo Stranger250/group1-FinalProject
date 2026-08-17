@@ -245,8 +245,9 @@ def main() -> None:
     ok("篡改签名 token → 401", r.status_code == 401)
 
     section("安全 · 越权（403）")
+    # O8 权限模型：普通用户可查题库但仅 APPROVED（6ff26e8 起放开），此处验证结果含审核通过态题目
     r = empA.req("GET", "/questions")
-    ok("员工访问题库 → 403", r.status_code == 403)
+    ok("员工访问题库 → 200（O8 仅 APPROVED）", r.status_code == 200 and r.json()["code"] == 200, f"got {r.status_code}")
     r = empA.req("GET", "/papers")
     ok("员工访问试卷 → 403", r.status_code == 403)
     r = empA.req("POST", "/ai/generate", json={**gen, "count": 5})
@@ -273,9 +274,9 @@ def main() -> None:
     ok("B 重命名 A 会话 → 404", r.status_code == 404)
     r = empB.req("DELETE", f"/ai/conversations/{convA}")
     ok("B 删除 A 会话 → 404", r.status_code == 404)
-    # 隐患 H03 详情为 PRD 透明度设计（全员可见），非归属掩码——断言 200 属预期
+    # 隐患 H03 详情为 O13 数据隔离（c2d4e7c 起）：普通用户仅本人可见，他人隐患与不存在统一 404 掩码
     r = empB.req("GET", f"/hazards/{hazardA}")
-    ok("B 查看 A 隐患详情 → 200（PRD 透明度设计，全员可见）", r.status_code == 200 and r.json()["code"] == 200, f"got {r.status_code}")
+    ok("B 查看 A 隐患详情 → 404（O13 数据隔离掩码）", r.status_code == 404, f"got {r.status_code}")
     r = empB.req("GET", "/hazards/99999999")
     ok("查看不存在的隐患 → 404", r.status_code == 404, f"got {r.status_code}")
     r = empB.req("GET", "/exams/1/result")
