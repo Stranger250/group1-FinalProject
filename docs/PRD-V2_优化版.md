@@ -349,10 +349,17 @@
 5. **留痕与安全**：生成记录写审计日志（action=doc_generate，含类型/标题/用户）；生成内容过敏感词检查。
 6. **API 可用性验证**：接入前先以该凭据实测连通性与生成质量（按用户指示执行），实测结果作为本项验收依据。
 
+**API 实测记录（2026-08-17）**：
+- ✅ 生成接口可达：`POST https://openapi.wps.cn/v7/sse/aippt/generate_slides_from_pxf_v2` 存在且网关正常响应（未带有效令牌返回 403 `bearer token missing`，非 404）
+- ✅ 认证机制确认：该网关要求 `Authorization: Bearer <JWT>`；apik 凭据需先经 `POST https://account.wps.cn/api/authorization/agent/v1/token`（body `{"grant_type":"api_key","api_key":"apik:..."}`，可带 `X-API-Key` 头）换取 access_token（有效期 12h/43200s，JWT 格式），再用 `Bearer <access_token>` 调用生成接口
+- ❌ 实测凭据 `apik:0:whpe8tie6nvprkdf.cdh66koyi4ae9wab8avc5yzgxlj21gia` 换 token 恒定返回 `400 {"result":"UnknownError","msg":"Unexpected error"}`（与请求格式/UA/参数名无关，服务端统一拒绝）
+- 🔧 判定：**key 侧问题**，疑似未激活/已过期/未绑定 AIPPT 应用授权（权限要求：AIPPT资源使用及生成 `kso.aippt.readwrite`）
+- ⏳ 待办：到 WPS 开放平台确认该 API Key 状态并申请「AIPPT资源使用及生成」应用授权，取得可用 key 后复测；复测通过前 O12 实现按 DeepSeek 降级路径开发（架构不受影响）
+
 **验收标准**：
 - [ ] 按用户需求生成 Word 文档（内容合理、标题/段落/表格格式规范）并可下载
 - [ ] 按用户需求生成 PPT（≥8 页，含封面/目录/要点/结束页）并可下载
-- [ ] WPS API 凭据可配置（环境变量/管理端）；连通性实测通过；失败自动降级 DeepSeek，不中断功能
+- [ ] WPS API 凭据可配置（环境变量/管理端）；**连通性实测通过（2026-08-17 首次实测：token 换取被拒 400，待 key 授权后复测）**；失败自动降级 DeepSeek，不中断功能
 - [ ] 生成动作留审计日志；生成内容过敏感词检查
 - [ ] 前端生成页完整（类型选择/需求描述/大纲预览/确认下载）
 
