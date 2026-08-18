@@ -91,9 +91,3 @@ frontend/
   src/                # Vue3 前端（views/components/store/api/router）
 crawler_output/       # 真实语料 JSON（101 篇，建库输入）
 ```
-
-## 安全说明
-
-- 敏感配置（数据库密码、LLM/视觉 API Key、JWT 密钥）仅存于 `backend/.env`（gitignored），代码中不硬编码；
-- 上传文件有类型白名单 + 魔数校验 + 大小上限；AI 问答与文档生成均过敏感词检查；
-- 权限模型：普通用户 / 安全员 / 管理员三角色，接口层双门禁（越权 404 掩码、角色 403）。
