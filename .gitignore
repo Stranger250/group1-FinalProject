@@ -27,3 +27,15 @@ backend/logs_*
 docs.zip
 
 crawler_output_generated_backup/
+
+# ===== 公开仓库隐藏项：内部过程文档 / 个人待办 / 测试过程数据 =====
+docs/
+todo.md
+backend/data/rejected_examples.json
+backend/data/eval/exp*.json
+backend/data/eval/stab_*.json
+
+# ===== 本地诊断脚本与临时产物（不入库）=====
+backend/scripts/_*.py
+backend/tmp_test_*.docx
+backend/tmp_test_*.pptx

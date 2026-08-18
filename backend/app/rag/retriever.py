@@ -71,6 +71,7 @@ class SearchResult:
     rrf_pool: list[float] = field(default_factory=list)  # 融合池 RRF 原始分（日志）
     vector_hits: int = 0
     bm25_hits: int = 0
+    title_hits: int = 0  # RAG2.0#9：标题路命中文档数
 
 
 class HybridRetriever:
@@ -110,6 +111,20 @@ class HybridRetriever:
         access_by_id = {cid: meta.get("access_level", "公开") for cid, meta in self._meta_by_id.items()}
         docs = [{"chunk_id": cid, "content": txt} for cid, txt in zip(data["ids"], data["documents"])]
         self._bm25 = BM25Index(docs, access_by_id=access_by_id)
+
+        # RAG2.0#9：标题路 BM25——每篇文档取一个父块（或首个块）用其标题建索引。
+        # 标题实体词（如「包钢稀土」「国家总体预案」）在正文索引中命中不到，
+        # 单独标题索引作为第三路参与 RRF，IDF 保证通用词（安全/生产）不产生干扰。
+        title_docs: list[dict] = []
+        seen_doc: set[str] = set()
+        for cid, meta in zip(data["ids"], data["metadatas"]):
+            doc_id = meta.get("doc_id") or ""
+            title = (meta.get("title") or "").strip()
+            if not title or doc_id in seen_doc:
+                continue
+            seen_doc.add(doc_id)
+            title_docs.append({"chunk_id": cid, "content": title})
+        self._bm25_title = BM25Index(title_docs, access_by_id=access_by_id)
 
         # 子块 → 父块回溯映射（build 保证：父块 parent_chunk_id=自身，子块=其父块）
         self._parent_by_chunk: dict[str, str] = {
@@ -161,11 +176,27 @@ class HybridRetriever:
         bm25_ids = [cid for cid, _ in sorted(bm25_scores.items(), key=lambda x: x[1], reverse=True)]
         result.bm25_hits = len(bm25_ids)
 
-        # ③ RRF 融合
+        # ②b 标题路（RAG2.0#9）：标题 BM25 命中文档 → 其全部父块加入融合池（文档级信号）
+        title_hit_docs: set[str] = set()
+        for q in [query] + list(kw_queries or []):
+            for cid, _sc in self._bm25_title.search(q, p.bm25_top_k, access_levels):
+                title_hit_docs.add(cid)  # cid 是该文档的代表块
+        title_ids: list[str] = []
+        if title_hit_docs:
+            # 代表块 → 该文档全部父块
+            doc_of: dict[str, str] = {cid: self._meta_by_id[cid].get("doc_id", "") for cid in title_hit_docs}
+            for cid, meta in self._meta_by_id.items():
+                if meta.get("is_parent") and meta.get("doc_id") in doc_of.values():
+                    title_ids.append(cid)
+        result.title_hits = len(title_hit_docs)
+
+        # ③ RRF 融合（向量 + 正文 BM25 + 标题 BM25 三路）
         rrf: dict[str, float] = {}
         for rank, cid in enumerate(vector_ids, start=1):
             rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (p.rrf_k + rank)
         for rank, cid in enumerate(bm25_ids, start=1):
+            rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (p.rrf_k + rank)
+        for rank, cid in enumerate(title_ids, start=1):
             rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (p.rrf_k + rank)
         fused = sorted(rrf.items(), key=lambda x: x[1], reverse=True)[:p.fusion_top_k]
         if not fused:
@@ -197,7 +228,12 @@ class HybridRetriever:
 
         # ⑤ reranker 父块粒度 Top-N
         pool_ids = [cid for cid, _ in parent_candidates] + expanded_ids
-        pairs = [(cid, self._meta_by_id[cid]["content"]) for cid in pool_ids]
+        # RAG2.0#10：rerank 输入注入标题（「{title}：{content}」）——cross-encoder 感知文档实体名，
+        # 包钢稀土类查询此前 rerank 只看正文，文档级实体信号丢失（标题路已进融合池仍被排掉）。
+        pairs = [
+            (cid, f"{self._meta_by_id[cid].get('title', '')}：{self._meta_by_id[cid]['content']}")
+            for cid in pool_ids
+        ]
         reranked = get_reranker().rerank(query, pairs, top_n=p.rerank_top_n)
         # O7 国家优先：rerank 分数同级时按层级 bonus 微调顺序（入选集合不变，仅排序）
         # rerank 返回 (chunk_id, content, score)

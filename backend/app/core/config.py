@@ -79,9 +79,14 @@ class Settings(BaseSettings):
     ref_doc_max_chars: int = 5000
 
     # ===== 模块二 AI 助手 RAG（M1 建库 / M2 检索 / M3 问答）=====
-    # 本地模型/向量库均在实训根环境（仓库根），用绝对路径规避 transformers 5.14.1 相对路径 HFValidationError
-    embed_model_dir: str = "D:/code/2026/7_8月实训/bge-large-zh"
-    rerank_model_dir: str = "D:/code/2026/7_8月实训/bge-reranker-base"
+    # 本地模型/向量库路径经环境变量注入（EMBED_MODEL_DIR / RERANK_MODEL_DIR，见 docker-compose 与 .env.example）；
+    # 默认值指向仓库同级目录（models/bge-*），规避 transformers 5.14.1 相对路径 HFValidationError
+    embed_model_dir: str = Field(
+        default_factory=lambda: os.environ.get("EMBED_MODEL_DIR", "../bge-large-zh")
+    )
+    rerank_model_dir: str = Field(
+        default_factory=lambda: os.environ.get("RERANK_MODEL_DIR", "../bge-reranker-base")
+    )
     # Chroma 持久目录放在 backend/data/chroma_kb（新目录，勿指向实训根 PDF 语料的 chroma_db）
     chroma_persist_dir: str = str(Path(__file__).resolve().parents[2] / "data" / "chroma_kb")
     chroma_collection: str = "shudao_kb"

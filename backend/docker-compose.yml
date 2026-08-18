@@ -34,7 +34,7 @@ services:
       UPLOAD_DIR: /data/uploads
     volumes:
       - ./data:/data                     # 知识库/上传/敏感词/快捷提问/反例库（全量 data 挂载）
-      - ${MODEL_DIR:-D:/code/2026/7_8月实训}:/models:ro
+      - ${MODEL_DIR:-./models}:/models:ro   # 本地模型目录经 MODEL_DIR 环境变量指定（如 /path/to/models）
       - ../crawler_output:/crawler_output:ro   # E02 出题法规语料（law_json_dir）
     ports:
       - "8002:8000"
