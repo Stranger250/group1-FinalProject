@@ -70,12 +70,12 @@
             <div class="result-list">
               <template v-for="(item, idx) in imageItems" :key="item.url">
                 <div v-if="item.status === 'pending'" class="result-card pending">
-                  <el-image class="result-thumb" :src="item.url" fit="cover" />
+                  <el-image class="result-thumb" :src="item.url" fit="contain" />
                   <span class="result-label">图片 {{ idx + 1 }} · 等待识别</span>
                 </div>
 
                 <div v-else-if="item.status === 'failed'" class="result-card failed">
-                  <el-image class="result-thumb" :src="item.url" fit="cover" />
+                  <el-image class="result-thumb" :src="item.url" fit="contain" />
                   <div class="failed-body">
                     <span class="result-label">图片 {{ idx + 1 }}</span>
                     <el-tag type="danger" size="small">识别失败</el-tag>
@@ -84,7 +84,7 @@
 
                 <div v-else-if="item.result" class="result-card">
                   <div class="result-card-head">
-                    <el-image class="result-thumb" :src="item.url" fit="cover" />
+                    <el-image class="result-thumb" :src="item.url" fit="contain" />
                     <span class="result-label">图片 {{ idx + 1 }}</span>
                     <el-tag type="success" size="small">已识别</el-tag>
                   </div>
@@ -316,7 +316,7 @@ function applyToReport(result: AnalyzeResult) {
   height: 56px;
   border-radius: 6px;
   border: 1px solid var(--el-border-color-light, #e5e1d7);
-  background: var(--page-bg, #f6f5f1);
+  background: #2b2f33;
 }
 
 .result-label {

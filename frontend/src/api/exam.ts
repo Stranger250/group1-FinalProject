@@ -1,4 +1,4 @@
-import { cleanParams, request, uploadRequest } from './request'
+import { cleanParams, downloadRequest, request, uploadRequest } from './request'
 import type { PageResult } from '@/types/api'
 import type {
   BatchDetail,
@@ -227,14 +227,30 @@ export function getWrongBook(page = 1, pageSize = 20) {
 
 // ---------- Excel 批量导入/导出（题库） ----------
 
-/** 导出全部题目 xlsx（浏览器直接下载） */
-export function exportQuestionsUrl(): string {
-  return '/api/v1/questions/export'
+/** 导出全部题目 xlsx（带鉴权下载，修复 window.open 401） */
+export async function exportQuestions() {
+  const blob = await downloadRequest('/questions/export')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `题库导出_${new Date().toISOString().slice(0, 10)}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
-/** 下载导入模板 xlsx */
-export function exportTemplateUrl(): string {
-  return '/api/v1/questions/export/template'
+/** 下载导入模板 xlsx（带鉴权下载） */
+export async function exportTemplate() {
+  const blob = await downloadRequest('/questions/export/template')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '题目导入模板.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 /** 批量导入题目 xlsx → {imported, errors:[{row,error}]} */

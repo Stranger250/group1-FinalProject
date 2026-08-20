@@ -17,6 +17,15 @@ const isWelcome = computed(() => chatStore.messages.length === 0)
 // ---------------- 滚动 ----------------
 const listRef = ref<HTMLDivElement | null>(null)
 
+/** 距底部阈值（px）：在此范围内视为"已贴底"，新内容到达才跟随滚动 */
+const SCROLL_BOTTOM_TOLERANCE = 80
+
+function isNearBottom(): boolean {
+  const el = listRef.value
+  if (!el) return true
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_BOTTOM_TOLERANCE
+}
+
 function scrollToBottom() {
   nextTick(() => {
     const el = listRef.value
@@ -24,10 +33,13 @@ function scrollToBottom() {
   })
 }
 
-/** 内容/状态变化（含流式 delta）时跟随滚动到底部 */
+/** 内容/状态变化（含流式 delta）时：仅当用户已贴底才跟随滚动；
+ *  用户主动上翻查看历史时保持当前阅读位置，不强制拉回底部。 */
 watch(
   () => chatStore.messages.map((m) => `${m.content}|${m.status}`).join('\n'),
-  scrollToBottom,
+  () => {
+    if (isNearBottom()) scrollToBottom()
+  },
 )
 
 // ---------------- 发送 / 停止 ----------------

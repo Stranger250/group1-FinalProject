@@ -105,7 +105,7 @@
             :key="img.id"
             :src="img.image_url"
             :preview-src-list="detail.images.map((i) => i.image_url)"
-            fit="cover"
+            fit="contain"
             class="img-item"
           />
         </div>
@@ -308,6 +308,7 @@ onMounted(() => load(1))
   width: 120px;
   height: 90px;
   border-radius: 6px;
+  background: #2b2f33;
 }
 .drawer-actions {
   margin-top: 16px;

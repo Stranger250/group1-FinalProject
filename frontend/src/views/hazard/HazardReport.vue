@@ -70,17 +70,14 @@
 
         <el-form-item label="隐患类型" prop="type">
           <div class="type-row">
-            <el-select
+            <el-input
               v-model="form.type"
-              placeholder="选择大类（可选）"
+              placeholder="手写隐患类型（如：脚手架搭设不规范）"
+              maxlength="64"
               clearable
-              filterable
-              allow-create
-              style="width: 180px"
-              @change="onTypeChange"
-            >
-              <el-option v-for="t in categoryRoots" :key="t.name" :label="t.name" :value="t.name" />
-            </el-select>
+              style="width: 240px"
+              @input="onTypeInput"
+            />
             <el-select
               v-model="form.subcategory"
               placeholder="选择子类（可选）"
@@ -96,6 +93,20 @@
                 :value="s.name"
               />
             </el-select>
+          </div>
+          <div class="type-quick">
+            <span class="type-quick-label">快捷：</span>
+            <el-tag
+              v-for="t in categoryRoots"
+              :key="t.name"
+              size="small"
+              effect="plain"
+              class="type-quick-tag"
+              :class="{ active: form.type === t.name }"
+              @click="form.type = t.name; form.subcategory = ''"
+            >
+              {{ t.name }}
+            </el-tag>
           </div>
         </el-form-item>
 
@@ -140,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -186,7 +197,8 @@ const currentSubcategories = computed(() => {
   const root = categoryRoots.value.find((r) => r.name === form.type)
   return root?.children ?? []
 })
-function onTypeChange() {
+/** 手写类型时子类清空（手写的类型可能不在分类树内，子类选择失效） */
+function onTypeInput() {
   form.subcategory = ''
 }
 async function loadCategories() {
@@ -197,6 +209,70 @@ async function loadCategories() {
     categoryRoots.value = []
   }
 }
+
+// ---------- 草稿持久化（bug 修复：刷新页面保留未填写完的数据） ----------
+const DRAFT_KEY = 'hazard_report_draft_v1'
+
+/** 表单可持久化字段（图片 URL 列表也存，刷新后可恢复已上传图片） */
+function snapshotForm() {
+  return {
+    title: form.title,
+    description: form.description,
+    location: form.location,
+    level: form.level,
+    type: form.type,
+    subcategory: form.subcategory,
+    reporter_name: form.reporter_name,
+    images: form.images,
+  }
+}
+
+function saveDraft() {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(snapshotForm()))
+  } catch {
+    /* 存储不可用（隐私模式等）静默忽略 */
+  }
+}
+
+function loadDraft() {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY)
+    if (!raw) return
+    const d = JSON.parse(raw) as ReturnType<typeof snapshotForm>
+    if (!d || typeof d !== 'object') return
+    // 只回填字符串/数组字段；类型校验避免脏数据
+    form.title = typeof d.title === 'string' ? d.title : ''
+    form.description = typeof d.description === 'string' ? d.description : ''
+    form.location = typeof d.location === 'string' ? d.location : ''
+    form.level = (HAZARD_LEVELS.some((l) => l.value === d.level) ? d.level : '') as HazardLevel | ''
+    form.type = typeof d.type === 'string' ? d.type : ''
+    form.subcategory = typeof d.subcategory === 'string' ? d.subcategory : ''
+    form.reporter_name = typeof d.reporter_name === 'string' ? d.reporter_name : userStore.user?.name ?? ''
+    form.images = Array.isArray(d.images) ? d.images.filter((u) => typeof u === 'string') : []
+  } catch {
+    /* 草稿损坏则忽略 */
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+// 表单变更自动存草稿（防抖 300ms）
+let draftTimer = 0
+watch(
+  () => snapshotForm(),
+  () => {
+    window.clearTimeout(draftTimer)
+    draftTimer = window.setTimeout(saveDraft, 300)
+  },
+  { deep: true },
+)
 
 const rules: FormRules = {
   description: [
@@ -258,6 +334,9 @@ async function onSubmit() {
     }
     const detail = await createHazard(payload)
     ElMessage.success('隐患上报成功')
+    // 上报成功后：清空已填写栏位 + 清除草稿（避免下次进入页面还是旧数据）
+    clearDraft()
+    resetAll()
     router.push(`/hazards/${detail.id}`)
   } catch {
     // 业务/网络错误已由 request 层统一提示
@@ -277,18 +356,21 @@ function resetAll() {
   form.images = []
   analysis.value = null
   keepRiskReport.value = true
+  clearDraft()
   formRef.value?.clearValidate()
   detailFormRef.value?.clearValidate()
 }
 
 onMounted(() => {
   loadCategories()
+  // 恢复上次未提交的草稿（刷新/误关页面后数据保留）
+  loadDraft()
   // 兼容旧入口：从「AI 分析」页跳转过来时带回的识别结果（老页面路由已移除，保留回填能力）
   const { result } = hazardStore.consumeReportCarry()
   if (result) {
     analysis.value = result
-    if (result.type_suggest) form.type = result.type_suggest
-    if (result.level_suggest) form.level = result.level_suggest
+    if (result.type_suggest && !form.type) form.type = result.type_suggest
+    if (result.level_suggest && !form.level) form.level = result.level_suggest
     if (result.description && !form.description) form.description = result.description
   }
 })
@@ -361,6 +443,26 @@ onMounted(() => {
 .type-row {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+}
+.type-quick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.type-quick-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary, #909399);
+}
+.type-quick-tag {
+  cursor: pointer;
+}
+.type-quick-tag.active {
+  border-color: var(--el-color-primary, #1e5a52);
+  color: var(--el-color-primary, #1e5a52);
+  background: var(--el-color-primary-light-9, #e8f2f0);
 }
 .level-option {
   display: inline-flex;

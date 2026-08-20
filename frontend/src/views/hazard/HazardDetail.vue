@@ -116,7 +116,7 @@
                   :key="img.id"
                   class="detail-img"
                   :src="img.image_url"
-                  fit="cover"
+                  fit="contain"
                   :preview-src-list="imageUrls"
                   :initial-index="imageIndex(img.id)"
                   preview-teleported
@@ -647,6 +647,7 @@ onMounted(load)
   height: 128px;
   border-radius: 6px;
   border: 1px solid var(--el-border-color-light, #e5e1d7);
+  background: #2b2f33; /* 深色底衬托 contain 图片 */
   cursor: zoom-in;
 }
 

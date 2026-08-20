@@ -7,7 +7,7 @@
         <el-image
           class="thumb-img"
           :src="url"
-          fit="cover"
+          fit="contain"
           :preview-src-list="modelValue"
           :initial-index="idx"
           preview-teleported
@@ -153,7 +153,7 @@ defineExpose({ getFileByUrl })
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--el-border-color-light, #e5e1d7);
-  background: var(--page-bg, #f6f5f1);
+  background: #2b2f33; /* 深色底衬托 contain 图片，避免白边混淆 */
 }
 
 .thumb-img {

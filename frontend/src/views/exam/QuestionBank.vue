@@ -153,7 +153,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { DIFFICULTIES, QUESTION_STATUSES, QUESTION_TYPES, difficultyMeta, questionStatusMeta, questionTypeLabel } from '@/utils/constants'
-import { deleteQuestion, exportQuestionsUrl, exportTemplateUrl, importQuestions, listQuestions, reviewUserQuestion, type QuestionQuery } from '@/api/exam'
+import { deleteQuestion, exportQuestions, exportTemplate, importQuestions, listQuestions, reviewUserQuestion, type QuestionQuery } from '@/api/exam'
 import type { PageResult } from '@/types/api'
 import type { Question, QuestionDifficulty, QuestionStatus, QuestionType } from '@/types/models/exam'
 import QuestionFormDialog from '@/components/exam/QuestionFormDialog.vue'
@@ -175,11 +175,11 @@ function onImportFileChange(file: UploadFile): void {
 }
 
 function doDownloadTemplate(): void {
-  window.open(exportTemplateUrl(), '_blank')
+  void exportTemplate()
 }
 
 function doExport(): void {
-  window.open(exportQuestionsUrl(), '_blank')
+  void exportQuestions()
 }
 
 async function doImport(): Promise<void> {
